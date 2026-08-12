@@ -1,5 +1,3 @@
-# src/data_fetcher.py
-
 import json
 import os
 import time
@@ -45,7 +43,7 @@ class FXDataFetcher:
         return pd.DataFrame()
 
     def append_latest_data_to_json(self, bulk_df: pd.DataFrame) -> bool:
-        """最新の1本（実行時間データ）を抽出し、既存の data.json へ追記保存"""
+        """最新の1本（実行時間データ）を抽出し、JST(日本時間)表記に変換して既存の data.json へ追記保存"""
         if bulk_df.empty:
             return False
 
@@ -67,7 +65,17 @@ class FXDataFetcher:
                     continue
 
                 latest_row = df_pair.iloc[-1:]
-                latest_ts = latest_row.index[0].strftime("%Y-%m-%d %H:%M:%S")
+
+                # タイムゾーンを Asia/Tokyo に変換
+                latest_dt = latest_row.index[0]
+                if latest_dt.tzinfo is not None:
+                    latest_dt = latest_dt.tz_convert("Asia/Tokyo")
+                else:
+                    latest_dt = latest_dt.tz_localize("UTC").tz_convert(
+                        "Asia/Tokyo"
+                    )
+
+                latest_ts = latest_dt.strftime("%Y-%m-%d %H:%M:%S")
 
                 new_record = {
                     "timestamp": latest_ts,
