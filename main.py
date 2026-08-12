@@ -1,5 +1,3 @@
-# main.py
-
 import json
 import os
 import time
@@ -38,9 +36,10 @@ def fetch_bulk_data_with_retry(
     for attempt in range(1, max_retries + 1):
         try:
             print(f"データ一括取得試行中... ({attempt}/{max_retries})")
+            # 1dで最新データを取得
             bulk_df = yf.download(
                 tickers=symbols,
-                period="5d",
+                period="1d",
                 interval="5m",
                 group_by="ticker",
                 progress=False,
@@ -59,10 +58,10 @@ def fetch_bulk_data_with_retry(
     return pd.DataFrame()
 
 
-def save_split_data_to_json(
+def append_latest_data_to_json(
     bulk_df: pd.DataFrame, base_dir: str = BASE_DATA_DIR
 ) -> bool:
-    """一括取得データを各通貨の data/{symbol}/data.json へ確実に保存する"""
+    """最新の1本（実行時間データ）を抽出し、既存の data.json へ追記保存する"""
     if bulk_df.empty:
         return False
 
@@ -70,6 +69,7 @@ def save_split_data_to_json(
 
     for pair_name, symbol in PAIRS.items():
         try:
+            # MultiIndex構造からの抽出
             if (
                 isinstance(bulk_df.columns, pd.MultiIndex)
                 and symbol in bulk_df.columns.levels[0]
@@ -83,33 +83,56 @@ def save_split_data_to_json(
             if df_pair.empty:
                 continue
 
-            records = []
-            for idx, row in df_pair.iterrows():
-                records.append(
-                    {
-                        "timestamp": idx.strftime("%Y-%m-%d %H:%M:%S"),
-                        "open": float(row["Open"]),
-                        "high": float(row["High"]),
-                        "low": float(row["Low"]),
-                        "close": float(row["Close"]),
-                        "volume": (
-                            int(row["Volume"]) if "Volume" in row else 0
-                        ),
-                    }
-                )
+            # 最新の1行（実行時間のデータ）のみを取得
+            latest_row = df_pair.iloc[-1:]
+            latest_ts = latest_row.index[0].strftime("%Y-%m-%d %H:%M:%S")
+
+            new_record = {
+                "timestamp": latest_ts,
+                "open": float(latest_row["Open"].iloc[0]),
+                "high": float(latest_row["High"].iloc[0]),
+                "low": float(latest_row["Low"].iloc[0]),
+                "close": float(latest_row["Close"].iloc[0]),
+                "volume": (
+                    int(latest_row["Volume"].iloc[0])
+                    if "Volume" in latest_row
+                    else 0
+                ),
+            }
 
             pair_dir = os.path.join(base_dir, symbol)
             os.makedirs(pair_dir, exist_ok=True)
-
             json_path = os.path.join(pair_dir, "data.json")
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(records, f, ensure_ascii=False, indent=2)
+
+            # 既存の JSON があれば読み込み、無ければ空リスト
+            existing_records = []
+            if os.path.exists(json_path):
+                with open(json_path, "r", encoding="utf-8") as f:
+                    try:
+                        existing_records = json.load(f)
+                    except json.JSONDecodeError:
+                        existing_records = []
+
+            # 重複チェック (同じ timestamp が無ければ末尾に追加)
+            existing_timestamps = {r["timestamp"] for r in existing_records}
+            if new_record["timestamp"] not in existing_timestamps:
+                existing_records.append(new_record)
+
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump(existing_records, f, ensure_ascii=False, indent=2)
+
+                print(
+                    f"[{symbol}] 最新データを追記完了 ({latest_ts}) / 総本数: {len(existing_records)}"
+                )
+            else:
+                print(
+                    f"[{symbol}] 既に同一時刻データ存在のためスキップ ({latest_ts})"
+                )
 
             saved_any = True
-            print(f"[{symbol}] data.json 保存成功 ({len(records)} 件)")
 
         except Exception as e:
-            print(f"JSON保存処理エラー ({symbol}): {e}")
+            print(f"JSON追記処理エラー ({symbol}): {e}")
 
     return saved_any
 
@@ -148,68 +171,57 @@ def load_pair_data_from_json(
 def main():
     logger = SystemLogger(webhook_url=LOG_WEBHOOK_URL)
 
-    # 運用ルール：基本は「前日分」を対象とする（翌日00:00以降に前日分が確定するため）
+    # 前日確定分をターゲット（日次集計用）
     target_date = (datetime.now() - timedelta(days=1)).date()
-    today_date = datetime.now().date()
 
-    # 判定：今日（当日）のデータをチェックしているか、前日分の確定データを処理しているか
-    # ※ cron-job.org で翌日未明（00:00以降）に回す場合は target_date は「前日」になります。
     logger.info(
         "パイプライン起動",
-        f"処理対象日: [{target_date}] (実行現在日: [{today_date}])",
+        f"実行時刻の最新1本を取得し `data/{{symbol}}/data.json` に追記します。",
     )
 
-    # Step 1: 一括取得 ➔ ディレクトリ分離 data.json 保存（時間帯問わず常に実行してファイルを生成・更新）
+    # Step 1: 実行時間の最新1本を取得 ➔ data.json へ追記
     ticker_symbols = list(PAIRS.values())
     bulk_df = fetch_bulk_data_with_retry(ticker_symbols, max_retries=5)
 
     if bulk_df.empty:
         logger.error(
             "取得失敗",
-            "Yahoo Financeからのデータ一括取得に失敗（またはレートリミット到達）しました。",
+            "Yahoo Financeからのデータ取得に失敗（またはレートリミット到達）しました。",
         )
         return
 
-    save_success = save_split_data_to_json(bulk_df, base_dir=BASE_DATA_DIR)
+    save_success = append_latest_data_to_json(bulk_df, base_dir=BASE_DATA_DIR)
     if not save_success:
         logger.error(
-            "JSON保存失敗",
-            f"`{BASE_DATA_DIR}/{{symbol}}/data.json` の生成に失敗しました。",
+            "JSON追記失敗",
+            f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。",
         )
         return
 
     logger.info(
-        "JSON保存完了",
-        f"全対象ペアの `{BASE_DATA_DIR}/{{symbol}}/data.json` が正常に生成・更新されました。",
+        "JSON追記完了",
+        f"全対象ペアの最新データ追記・保存処理が完了しました。",
     )
 
-    # Step 2: 各通貨の data.json から読み込んで処理・レポート検証
+    # Step 2: 各通貨の data.json から蓄積されたデータを読み込んで検証・送信判定
     for pair_name, symbol in PAIRS.items():
         try:
             df_pair = load_pair_data_from_json(symbol, base_dir=BASE_DATA_DIR)
 
             if df_pair.empty:
-                logger.warning(
-                    "データ未存在",
-                    f"[{pair_name}] の JSON ファイルが読み込めませんでした。",
-                )
                 continue
 
             reporter = FXDailyReporter(pips_value=0.01, logger=logger)
-
-            # 対象日のデータ抽出
             df_day = df_pair[df_pair.index.date == target_date].sort_index()
             actual_count = len(df_day)
 
-            # 【判定分岐】
-            # 1. 288本完全揃っている場合（あるいは翌日00:00以降の本番フェーズ）
+            # 対象（前日分）のデータが 288 本揃っていたら正式レポートを送信
             if actual_count == 288:
                 logger.info(
                     "完全データ検知",
-                    f"[{pair_name}] [{target_date}] 288本完全データを確認。正式レポートを作成します。",
+                    f"[{pair_name}] 前日[{target_date}] の288本蓄積完了を確認。レポートを配信します。",
                 )
 
-                # 正式な検証ログ＆レポート送信
                 df_verified = (
                     reporter.extract_verified_full_day_with_logging(
                         df_pair, target_date=target_date, pair_label=pair_name
@@ -234,17 +246,14 @@ def main():
                     if success:
                         logger.info(
                             "送信完了",
-                            f"[{pair_name}] の日次確定レポートを送信しました。",
+                            f"[{pair_name}] の確定日次レポートを送信しました。",
                         )
                     if os.path.exists(chart_filename):
                         os.remove(chart_filename)
-
             else:
-                # 2. まだ288本に達していない場合（日中テスト・途中経過の確認用）
-                logger.warning(
-                    "途中経過データ確認",
-                    f"[{pair_name}] [{target_date}] 現在の取得本数: {actual_count}/288本。"
-                    "（※日中実行またはデータ蓄積中のため、本番レポート送信はスキップしファイル生成チェックのみ行いました）",
+                logger.info(
+                    "データ蓄積中",
+                    f"[{pair_name}] 前日[{target_date}] の蓄積本数: {actual_count}/288本",
                 )
 
             time.sleep(0.5)
