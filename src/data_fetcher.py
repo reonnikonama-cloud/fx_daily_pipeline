@@ -43,7 +43,7 @@ class FXDataFetcher:
         return pd.DataFrame()
 
     def append_latest_data_to_json(self, bulk_df: pd.DataFrame) -> bool:
-        """最新の1本（実行時間データ）を抽出し、JST(日本時間)表記に変換して既存の data.json へ追記保存"""
+        """最新の1本を追記保存（月が変わった場合は既存構成を崩さず自動リセットして今月分を開始）"""
         if bulk_df.empty:
             return False
 
@@ -76,6 +76,7 @@ class FXDataFetcher:
                     )
 
                 latest_ts = latest_dt.strftime("%Y-%m-%d %H:%M:%S")
+                current_ym = latest_dt.strftime("%Y-%m")  # 例: "2026-08"
 
                 new_record = {
                     "timestamp": latest_ts,
@@ -102,6 +103,19 @@ class FXDataFetcher:
                         except json.JSONDecodeError:
                             existing_records = []
 
+                # --- 【新規機能：月次自動リセット】 ---
+                # 既存データ内に古い月（例: 7月）のデータが残っている状態で新しい月（8月）に入った場合、
+                # 既存構成（data/通貨ペア/data.json）を崩さずにリストを空にして今月分を新規作成
+                if existing_records:
+                    last_record_ts = existing_records[-1].get("timestamp", "")
+                    if last_record_ts:
+                        last_ym = last_record_ts[:7]  # "YYYY-MM"
+                        if last_ym != current_ym:
+                            print(
+                                f"[{symbol}] 月の更新を検知 ({last_ym} -> {current_ym})。今月分データを新規蓄積するため data.json を初期化します。"
+                            )
+                            existing_records = []
+
                 existing_timestamps = {
                     r["timestamp"] for r in existing_records
                 }
@@ -114,7 +128,7 @@ class FXDataFetcher:
                         )
 
                     print(
-                        f"[{symbol}] 最新データを追記完了 ({latest_ts}) / 総本数: {len(existing_records)}"
+                        f"[{symbol}] 最新データを追記完了 ({latest_ts}) / 当月蓄積本数: {len(existing_records)}本"
                     )
                 else:
                     print(
