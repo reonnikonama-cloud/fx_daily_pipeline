@@ -1,34 +1,42 @@
-name: FX Daily Report Execution
+name: FX Daily Report Pipeline
 
-# 外部API (cron-job.org等) からのトリガーを受け取る
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *' # 例: 5分おきに自動実行する場合
+  workflow_dispatch:      # 手動実行ボタン
 
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write     # リポジトリへの書き込み権限を付与
+
     steps:
-      # 1. リポジトリのコードをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Python環境のセットアップ
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
-      # 3. 依存ライブラリのインストール
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -r requirements.txt
 
-      # 4. メインパイプラインの実行
       - name: Run main pipeline
         env:
           DISCORD_REPORT_WEBHOOK_URL: ${{ secrets.DISCORD_REPORT_WEBHOOK_URL }}
           DISCORD_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_LOG_WEBHOOK_URL }}
         run: |
           python main.py
+
+      # 【ここを追加】生成・追記された data/ ディレクトリをリポジトリに Commit & Push
+      - name: Commit and push updated data.json
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto-update market data [skip ci]" && git push)
