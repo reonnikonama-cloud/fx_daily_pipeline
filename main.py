@@ -1,11 +1,11 @@
-import json
+# main.py
+
 import os
 import time
 from datetime import datetime, timedelta
-import pandas as pd
-import yfinance as yf
 
 from src.daily_reporter import FXDailyReporter
+from src.data_fetcher import FXDataFetcher
 from src.system_logger import SystemLogger
 from src.visualizer import BacktestVisualizer
 
@@ -29,160 +29,20 @@ PAIRS = {
 BASE_DATA_DIR = "data"
 
 
-def fetch_bulk_data_with_retry(
-    symbols: list, max_retries: int = 5
-) -> pd.DataFrame:
-    """429エラー(Rate Limit)対策を入れた一括取得ロジック"""
-    for attempt in range(1, max_retries + 1):
-        try:
-            print(f"データ一括取得試行中... ({attempt}/{max_retries})")
-            # 1dで最新データを取得
-            bulk_df = yf.download(
-                tickers=symbols,
-                period="1d",
-                interval="5m",
-                group_by="ticker",
-                progress=False,
-            )
-
-            if not bulk_df.empty:
-                return bulk_df
-
-        except Exception as e:
-            print(f"取得エラー発生 ({attempt}/{max_retries}): {e}")
-
-        wait_time = attempt * 10
-        print(f"429回避のため {wait_time} 秒待機して再試行します...")
-        time.sleep(wait_time)
-
-    return pd.DataFrame()
-
-
-def append_latest_data_to_json(
-    bulk_df: pd.DataFrame, base_dir: str = BASE_DATA_DIR
-) -> bool:
-    """最新の1本（実行時間データ）を抽出し、既存の data.json へ追記保存する"""
-    if bulk_df.empty:
-        return False
-
-    saved_any = False
-
-    for pair_name, symbol in PAIRS.items():
-        try:
-            # MultiIndex構造からの抽出
-            if (
-                isinstance(bulk_df.columns, pd.MultiIndex)
-                and symbol in bulk_df.columns.levels[0]
-            ):
-                df_pair = bulk_df[symbol].copy().dropna(subset=["Close"])
-            elif not isinstance(bulk_df.columns, pd.MultiIndex):
-                df_pair = bulk_df.copy().dropna(subset=["Close"])
-            else:
-                continue
-
-            if df_pair.empty:
-                continue
-
-            # 最新の1行（実行時間のデータ）のみを取得
-            latest_row = df_pair.iloc[-1:]
-            latest_ts = latest_row.index[0].strftime("%Y-%m-%d %H:%M:%S")
-
-            new_record = {
-                "timestamp": latest_ts,
-                "open": float(latest_row["Open"].iloc[0]),
-                "high": float(latest_row["High"].iloc[0]),
-                "low": float(latest_row["Low"].iloc[0]),
-                "close": float(latest_row["Close"].iloc[0]),
-                "volume": (
-                    int(latest_row["Volume"].iloc[0])
-                    if "Volume" in latest_row
-                    else 0
-                ),
-            }
-
-            pair_dir = os.path.join(base_dir, symbol)
-            os.makedirs(pair_dir, exist_ok=True)
-            json_path = os.path.join(pair_dir, "data.json")
-
-            # 既存の JSON があれば読み込み、無ければ空リスト
-            existing_records = []
-            if os.path.exists(json_path):
-                with open(json_path, "r", encoding="utf-8") as f:
-                    try:
-                        existing_records = json.load(f)
-                    except json.JSONDecodeError:
-                        existing_records = []
-
-            # 重複チェック (同じ timestamp が無ければ末尾に追加)
-            existing_timestamps = {r["timestamp"] for r in existing_records}
-            if new_record["timestamp"] not in existing_timestamps:
-                existing_records.append(new_record)
-
-                with open(json_path, "w", encoding="utf-8") as f:
-                    json.dump(existing_records, f, ensure_ascii=False, indent=2)
-
-                print(
-                    f"[{symbol}] 最新データを追記完了 ({latest_ts}) / 総本数: {len(existing_records)}"
-                )
-            else:
-                print(
-                    f"[{symbol}] 既に同一時刻データ存在のためスキップ ({latest_ts})"
-                )
-
-            saved_any = True
-
-        except Exception as e:
-            print(f"JSON追記処理エラー ({symbol}): {e}")
-
-    return saved_any
-
-
-def load_pair_data_from_json(
-    symbol: str, base_dir: str = BASE_DATA_DIR
-) -> pd.DataFrame:
-    """data/{symbol}/data.json からデータを読み込んで DataFrame 化"""
-    json_path = os.path.join(base_dir, symbol, "data.json")
-
-    if not os.path.exists(json_path):
-        return pd.DataFrame()
-
-    with open(json_path, "r", encoding="utf-8") as f:
-        records = json.load(f)
-
-    if not records:
-        return pd.DataFrame()
-
-    df = pd.DataFrame(records)
-    df["Datetime"] = pd.to_datetime(df["timestamp"])
-    df.set_index("Datetime", inplace=True)
-    df.rename(
-        columns={
-            "open": "Open",
-            "high": "High",
-            "low": "Low",
-            "close": "Close",
-            "volume": "Volume",
-        },
-        inplace=True,
-    )
-    return df
-
-
 def main():
     logger = SystemLogger(webhook_url=LOG_WEBHOOK_URL)
+    fetcher = FXDataFetcher(pairs=PAIRS, base_dir=BASE_DATA_DIR)
 
     # 前日確定分をターゲット（日次集計用）
     target_date = (datetime.now() - timedelta(days=1)).date()
 
     logger.info(
         "パイプライン起動",
-        f"実行時刻の最新1本を取得し `data/{{symbol}}/data.json` に追記します。",
+        "実行時刻の最新1本を取得し `data/{symbol}/data.json` に追記します。",
     )
 
-    # Step 1: 実行時間の最新1本を取得 ➔ data.json へ追記
-    ticker_symbols = list(PAIRS.values())
-    bulk_df = fetch_bulk_data_with_retry(ticker_symbols, max_retries=5)
-
+    # 1. データの取得 & 追記保存
+    bulk_df = fetcher.fetch_bulk_data_with_retry(max_retries=5)
     if bulk_df.empty:
         logger.error(
             "取得失敗",
@@ -190,7 +50,7 @@ def main():
         )
         return
 
-    save_success = append_latest_data_to_json(bulk_df, base_dir=BASE_DATA_DIR)
+    save_success = fetcher.append_latest_data_to_json(bulk_df)
     if not save_success:
         logger.error(
             "JSON追記失敗",
@@ -200,14 +60,13 @@ def main():
 
     logger.info(
         "JSON追記完了",
-        f"全対象ペアの最新データ追記・保存処理が完了しました。",
+        "全対象ペアの最新データ追記・保存処理が完了しました。",
     )
 
-    # Step 2: 各通貨の data.json から蓄積されたデータを読み込んで検証・送信判定
+    # 2. 蓄積データの読み込み・検証・レポート配信
     for pair_name, symbol in PAIRS.items():
         try:
-            df_pair = load_pair_data_from_json(symbol, base_dir=BASE_DATA_DIR)
-
+            df_pair = fetcher.load_pair_data_from_json(symbol)
             if df_pair.empty:
                 continue
 
@@ -215,7 +74,7 @@ def main():
             df_day = df_pair[df_pair.index.date == target_date].sort_index()
             actual_count = len(df_day)
 
-            # 対象（前日分）のデータが 288 本揃っていたら正式レポートを送信
+            # 288本（前日分）が揃ったタイミングで送信
             if actual_count == 288:
                 logger.info(
                     "完全データ検知",
