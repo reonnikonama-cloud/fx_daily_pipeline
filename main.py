@@ -4,16 +4,17 @@ import os
 import time
 from datetime import datetime, timedelta
 
-from src.daily_reporter import FXDailyReporter
 from src.data_fetcher import FXDataFetcher
+from src.json_storage import JSONStorage
 from src.system_logger import SystemLogger
+from src.daily_reporter import FXDailyReporter
 from src.visualizer import BacktestVisualizer
+from src.discord_client import DiscordClient
 
-# Webhook URL
+# Webhook 設定
 REPORT_WEBHOOK_URL = os.getenv("DISCORD_REPORT_WEBHOOK_URL")  # #daily-summary
-LOG_WEBHOOK_URL = os.getenv("DISCORD_LOG_WEBHOOK_URL")  # #system-logs
+LOG_WEBHOOK_URL = os.getenv("DISCORD_LOG_WEBHOOK_URL")        # #system-logs
 
-# 9通貨ペアの定義
 PAIRS = {
     "米ドル/円": "JPY=X",
     "ユーロ/円": "EURJPY=X",
@@ -30,10 +31,12 @@ BASE_DATA_DIR = "data"
 
 
 def main():
+    # 0. 共通コンポーネントの初期化
     logger = SystemLogger(webhook_url=LOG_WEBHOOK_URL)
-    fetcher = FXDataFetcher(pairs=PAIRS, base_dir=BASE_DATA_DIR)
+    fetcher = FXDataFetcher(pairs=PAIRS)
+    storage = JSONStorage(base_dir=BASE_DATA_DIR)
+    reporter = FXDailyReporter(pips_value=0.01, logger=logger)
 
-    # 前日確定分をターゲット（日次集計用）
     target_date = (datetime.now() - timedelta(days=1)).date()
 
     logger.info(
@@ -41,52 +44,48 @@ def main():
         "実行時刻の最新1本を取得し `data/{symbol}/data.json` に追記します。",
     )
 
-    # 1. データの取得 & 追記保存
+    # 1. 最新データの取得
     bulk_df = fetcher.fetch_bulk_data_with_retry(max_retries=5)
     if bulk_df.empty:
-        logger.error(
-            "取得失敗",
-            "Yahoo Financeからのデータ取得に失敗（またはレートリミット到達）しました。",
-        )
+        logger.error("取得失敗", "Yahoo Financeからのデータ取得に失敗（またはレートリミット到達）しました。")
         return
 
-    save_success = fetcher.append_latest_data_to_json(bulk_df)
-    if not save_success:
-        logger.error(
-            "JSON追記失敗",
-            f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。",
-        )
+    # 2. JSONファイルへの追記・保存
+    save_any = False
+    for pair_name, symbol in PAIRS.items():
+        df_pair = fetcher.extract_pair_df(bulk_df, symbol)
+        if not df_pair.empty:
+            if storage.append_pair_data(symbol, df_pair):
+                save_any = True
+
+    if not save_any:
+        logger.error("JSON追記失敗", f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。")
         return
 
-    logger.info(
-        "JSON追記完了",
-        "全対象ペアの最新データ追記・保存処理が完了しました。",
-    )
+    logger.info("JSON追記完了", "全対象ペアの最新データ追記・保存処理が完了しました。")
 
-    # 2. 蓄積データの読み込み・検証・レポート配信
+    # 3. 蓄積データの検証・チャート生成・レポート送信
     for pair_name, symbol in PAIRS.items():
         try:
-            df_pair = fetcher.load_pair_data_from_json(symbol)
-            if df_pair.empty:
+            df_accumulated = storage.load_pair_data(symbol)
+            if df_accumulated.empty:
                 continue
 
-            reporter = FXDailyReporter(pips_value=0.01, logger=logger)
-            df_day = df_pair[df_pair.index.date == target_date].sort_index()
+            df_day = df_accumulated[df_accumulated.index.date == target_date].sort_index()
             actual_count = len(df_day)
 
-            # 288本（前日分）が揃ったタイミングで送信
             if actual_count == 288:
                 logger.info(
                     "完全データ検知",
-                    f"[{pair_name}] 前日[{target_date}] の288本蓄積完了を確認。レポートを配信します。",
+                    f"[{pair_name}] 前日[{target_date}] の288本蓄積完了を確認。レポート処理を開始します。",
                 )
 
-                df_verified = (
-                    reporter.extract_verified_full_day_with_logging(
-                        df_pair, target_date=target_date, pair_label=pair_name
-                    )
+                df_verified = reporter.extract_verified_full_day_with_logging(
+                    df_accumulated, target_date=target_date, pair_label=pair_name
                 )
+
                 if not df_verified.empty:
+                    # チャート描画
                     chart_filename = f"chart_{symbol.replace('=X', '')}.png"
                     BacktestVisualizer.plot_daily_line_chart(
                         df_verified,
@@ -95,18 +94,15 @@ def main():
                         save_path=chart_filename,
                     )
 
-                    report = reporter.generate_report(
-                        df_verified, pair_name=pair_name
-                    )
-                    success = reporter.send_discord_webhook(
-                        report, REPORT_WEBHOOK_URL, image_path=chart_filename
+                    # レポート生成 & 送信
+                    report_text = reporter.generate_report_text(df_verified, pair_name=pair_name)
+                    success = DiscordClient.send_multipart(
+                        REPORT_WEBHOOK_URL, report_text, image_path=chart_filename
                     )
 
                     if success:
-                        logger.info(
-                            "送信完了",
-                            f"[{pair_name}] の確定日次レポートを送信しました。",
-                        )
+                        logger.info("送信完了", f"[{pair_name}] の確定日次レポートを送信しました。")
+
                     if os.path.exists(chart_filename):
                         os.remove(chart_filename)
             else:
