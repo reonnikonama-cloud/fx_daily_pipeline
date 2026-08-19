@@ -16,13 +16,14 @@ from src.discord_client import DiscordClient
 REPORT_WEBHOOK_URL = os.getenv("DISCORD_REPORT_WEBHOOK_URL")  # #daily-summary
 LOG_WEBHOOK_URL = os.getenv("DISCORD_LOG_WEBHOOK_URL")        # #system-logs
 
-# 確定した6通貨ペア（表示名 : GMOコインシンボル）
+# 確定した7通貨ペア（表示名 : GMOコインシンボル）
 PAIRS = {
     "米ドル/円": "USD_JPY",
     "ユーロ/円": "EUR_JPY",
     "英ポンド/円": "GBP_JPY",
     "豪ドル/円": "AUD_JPY",
     "スイスフラン/円": "CHF_JPY",
+    "NZドル/円": "NZD_JPY",
     "ユーロ/ドル": "EUR_USD",
 }
 
@@ -40,7 +41,7 @@ def main():
 
     logger.info(
         "パイプライン起動",
-        "GMOコイン APIより実行時刻の最新データを取得し `data/{symbol}/data.json` に追記します。",
+        "GMOコイン APIより実行時刻の最新TICKER生データを取得し `data/{symbol}/data.json` に保存します。",
     )
 
     # 1. 最新価格（Ticker）の取得
@@ -49,37 +50,24 @@ def main():
         logger.error("取得失敗", "GMOコイン APIからのデータ取得に失敗しました。")
         return
 
-    # 2. JSONファイルへの追記・保存
+    # 2. JSONファイルへの生データ追記・保存
     save_any = False
-    now_ts = pd.Timestamp.now()
 
     for pair_name, symbol in PAIRS.items():
-        # 対象シンボルの Ticker データを抽出
         df_ticker = tickers_df[tickers_df["symbol"] == symbol].copy() if not tickers_df.empty else pd.DataFrame()
 
         if not df_ticker.empty:
-            bid_price = float(df_ticker["bid"].values[0]) if "bid" in df_ticker.columns else 0.0
-            ask_price = float(df_ticker["ask"].values[0]) if "ask" in df_ticker.columns else 0.0
+            # レスポンスの dict をそのまま抽出
+            raw_record = df_ticker.iloc[0].to_dict()
 
-            row_data = {
-                "Open": bid_price,
-                "High": bid_price,
-                "Low": bid_price,
-                "Close": bid_price,
-                "Ask": ask_price,
-                "Volume": 0.0,
-            }
-
-            df_single = pd.DataFrame([row_data], index=[now_ts])
-
-            if storage.append_pair_data(symbol, df_single):
+            if storage.append_raw_ticker(symbol, raw_record):
                 save_any = True
 
     if not save_any:
         logger.error("JSON追記失敗", f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。")
         return
 
-    logger.info("JSON追記完了", "全対象6ペアの最新データの追記・保存処理が完了しました。")
+    logger.info("JSON追記完了", "全対象7ペアの最新生データの追記・保存処理が完了しました。")
 
     # 3. 蓄積データの検証・チャート生成・レポート送信
     for pair_name, symbol in PAIRS.items():
