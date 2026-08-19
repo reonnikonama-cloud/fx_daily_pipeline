@@ -40,17 +40,14 @@ def main():
 
     logger.info(
         "パイプライン起動",
-        "GMOコイン APIより実行時刻の最新データ・板情報を取得し `data/{symbol}/data.json` に追記します。",
+        "GMOコイン APIより実行時刻の最新データを取得し `data/{symbol}/data.json` に追記します。",
     )
 
-    # 1. 最新価格（Ticker）および板情報（Orderbook）の取得
+    # 1. 最新価格（Ticker）の取得
     tickers_df = fetcher.fetch_bulk_data_with_retry(max_retries=5)
     if tickers_df.empty:
         logger.error("取得失敗", "GMOコイン APIからのデータ取得に失敗しました。")
         return
-
-    # 全ペアの板情報（需給データ）を取得
-    orderbooks_df = fetcher.fetch_all_orderbooks()
 
     # 2. JSONファイルへの追記・保存
     save_any = False
@@ -61,11 +58,9 @@ def main():
         df_ticker = tickers_df[tickers_df["symbol"] == symbol].copy() if not tickers_df.empty else pd.DataFrame()
 
         if not df_ticker.empty:
-            # GMOコイン Ticker のキー構造に安全に対応 (bid/ask)
             bid_price = float(df_ticker["bid"].values[0]) if "bid" in df_ticker.columns else 0.0
             ask_price = float(df_ticker["ask"].values[0]) if "ask" in df_ticker.columns else 0.0
 
-            # 単発取得のデータポイントとして整形
             row_data = {
                 "Open": bid_price,
                 "High": bid_price,
@@ -74,13 +69,6 @@ def main():
                 "Ask": ask_price,
                 "Volume": 0.0,
             }
-
-            # 板情報（買板・売板比率）があれば結合
-            if not orderbooks_df.empty and symbol in orderbooks_df["symbol"].values:
-                ob_row = orderbooks_df[orderbooks_df["symbol"] == symbol].iloc[0]
-                row_data["BidRatio"] = ob_row.get("bid_ratio", 50.0)
-                row_data["AskRatio"] = ob_row.get("ask_ratio", 50.0)
-                row_data["Sentiment"] = ob_row.get("sentiment", "拮抗")
 
             df_single = pd.DataFrame([row_data], index=[now_ts])
 
@@ -91,7 +79,7 @@ def main():
         logger.error("JSON追記失敗", f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。")
         return
 
-    logger.info("JSON追記完了", "全対象6ペアの最新データおよび板情報の追記・保存処理が完了しました。")
+    logger.info("JSON追記完了", "全対象6ペアの最新データの追記・保存処理が完了しました。")
 
     # 3. 蓄積データの検証・チャート生成・レポート送信
     for pair_name, symbol in PAIRS.items():
