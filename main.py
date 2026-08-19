@@ -16,7 +16,7 @@ from src.discord_client import DiscordClient
 REPORT_WEBHOOK_URL = os.getenv("DISCORD_REPORT_WEBHOOK_URL")  # #daily-summary
 LOG_WEBHOOK_URL = os.getenv("DISCORD_LOG_WEBHOOK_URL")        # #system-logs
 
-# 確定した7通貨ペア（表示名 : GMOコインシンボル）
+# 確定した8通貨ペア（表示名 : GMOコインシンボル）
 PAIRS = {
     "米ドル/円": "USD_JPY",
     "ユーロ/円": "EUR_JPY",
@@ -24,6 +24,7 @@ PAIRS = {
     "豪ドル/円": "AUD_JPY",
     "スイスフラン/円": "CHF_JPY",
     "NZドル/円": "NZD_JPY",
+    "カナダドル/円": "CAD_JPY",
     "ユーロ/ドル": "EUR_USD",
 }
 
@@ -67,7 +68,7 @@ def main():
         logger.error("JSON追記失敗", f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。")
         return
 
-    logger.info("JSON追記完了", "全対象7ペアの最新生データの追記・保存処理が完了しました。")
+    logger.info("JSON追記完了", "全対象8ペアの最新生データの追記・保存処理が完了しました。")
 
     # 3. 蓄積データの検証・チャート生成・レポート送信
     for pair_name, symbol in PAIRS.items():
