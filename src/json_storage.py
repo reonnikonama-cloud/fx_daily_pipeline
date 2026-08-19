@@ -11,37 +11,10 @@ class JSONStorage:
     def __init__(self, base_dir: str = "data"):
         self.base_dir = base_dir
 
-    def append_pair_data(self, symbol: str, df_pair: pd.DataFrame) -> bool:
-        """指定シンボルの最新1行を抽出して data.json へ追記（月更新時の自動初期化含む）"""
-        if df_pair.empty:
+    def append_raw_ticker(self, symbol: str, ticker_data: dict) -> bool:
+        """APIから取得した Ticker 生データ（dict）をそのまま data.json へ追記"""
+        if not ticker_data:
             return False
-
-        latest_row = df_pair.iloc[-1:]
-        latest_dt = latest_row.index[0]
-
-        # タイムゾーンを Asia/Tokyo に統一
-        if latest_dt.tzinfo is not None:
-            latest_dt = latest_dt.tz_convert("Asia/Tokyo")
-        else:
-            latest_dt = latest_dt.tz_localize("UTC").tz_convert("Asia/Tokyo")
-
-        latest_ts = latest_dt.strftime("%Y-%m-%d %H:%M:%S")
-        current_ym = latest_dt.strftime("%Y-%m")
-
-        new_record = {
-            "timestamp": latest_ts,
-            "open": float(latest_row["Open"].iloc[0]),
-            "high": float(latest_row["High"].iloc[0]),
-            "low": float(latest_row["Low"].iloc[0]),
-            "close": float(latest_row["Close"].iloc[0]),
-            "volume": float(latest_row["Volume"].iloc[0]) if "Volume" in latest_row else 0.0,
-        }
-
-        # 板情報（Orderbook）が存在すれば追記
-        if "BidRatio" in latest_row.columns:
-            new_record["bid_ratio"] = float(latest_row["BidRatio"].iloc[0])
-            new_record["ask_ratio"] = float(latest_row["AskRatio"].iloc[0])
-            new_record["sentiment"] = str(latest_row["Sentiment"].iloc[0])
 
         pair_dir = os.path.join(self.base_dir, symbol)
         os.makedirs(pair_dir, exist_ok=True)
@@ -55,26 +28,30 @@ class JSONStorage:
                 except json.JSONDecodeError:
                     existing_records = []
 
-        # 月次自動リセット判定
-        if existing_records:
+        # 月次自動リセット判定 (timestamp の先頭 YYYY-MM で比較)
+        current_ts = ticker_data.get("timestamp", "")
+        current_ym = current_ts[:7] if current_ts else ""
+
+        if existing_records and current_ym:
             last_record_ts = existing_records[-1].get("timestamp", "")
             if last_record_ts and last_record_ts[:7] != current_ym:
                 print(f"[{symbol}] 月の更新を検知 ({last_record_ts[:7]} -> {current_ym})。今月分用に data.json を初期化します。")
                 existing_records = []
 
-        existing_timestamps = {r["timestamp"] for r in existing_records}
-        if new_record["timestamp"] not in existing_timestamps:
-            existing_records.append(new_record)
+        # 重複追記防止 (タイムスタンプ比較)
+        existing_timestamps = {r.get("timestamp") for r in existing_records}
+        if current_ts not in existing_timestamps:
+            existing_records.append(ticker_data)
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(existing_records, f, ensure_ascii=False, indent=2)
-            print(f"[{symbol}] 最新データを追記完了 ({latest_ts}) / 当月蓄積本数: {len(existing_records)}本")
+            print(f"[{symbol}] 生データを追記完了 ({current_ts}) / 当月蓄積本数: {len(existing_records)}本")
         else:
-            print(f"[{symbol}] 既に同一時刻データが存在するためスキップ ({latest_ts})")
+            print(f"[{symbol}] 既に同一時刻データが存在するためスキップ ({current_ts})")
 
         return True
 
     def load_pair_data(self, symbol: str) -> pd.DataFrame:
-        """data/{symbol}/data.json を読み込んで DataFrame 化"""
+        """data/{symbol}/data.json を読み込み、レポート・チャート用の DataFrame に整形"""
         json_path = os.path.join(self.base_dir, symbol, "data.json")
         if not os.path.exists(json_path):
             return pd.DataFrame()
@@ -89,19 +66,23 @@ class JSONStorage:
             return pd.DataFrame()
 
         df = pd.DataFrame(records)
+
+        # ISO形式タイムスタンプをDatetime化 & JST変換
         df["Datetime"] = pd.to_datetime(df["timestamp"])
         df.set_index("Datetime", inplace=True)
-        df.rename(
-            columns={
-                "open": "Open",
-                "high": "High",
-                "low": "Low",
-                "close": "Close",
-                "volume": "Volume",
-                "bid_ratio": "BidRatio",
-                "ask_ratio": "AskRatio",
-                "sentiment": "Sentiment",
-            },
-            inplace=True,
-        )
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC").tz_convert("Asia/Tokyo")
+        else:
+            df.index = df.index.tz_convert("Asia/Tokyo")
+
+        # 数値型へ変換
+        df["bid"] = df["bid"].astype(float)
+        df["ask"] = df["ask"].astype(float)
+
+        # チャート・レポート互換用カラム (Close/Open/High/Low)
+        df["Close"] = df["bid"]
+        df["Open"] = df["bid"]
+        df["High"] = df["bid"]
+        df["Low"] = df["bid"]
+
         return df
