@@ -16,6 +16,7 @@ class FXDataFetcher:
         "GBP_JPY": "GBP_JPY",
         "AUD_JPY": "AUD_JPY",
         "CHF_JPY": "CHF_JPY",
+        "NZD_JPY": "NZD_JPY",
         "EUR_USD": "EUR_USD",
     }
 
@@ -23,7 +24,7 @@ class FXDataFetcher:
         self.pairs = pairs if pairs else self.DEFAULT_PAIRS
 
     def fetch_tickers(self, max_retries: int = 3) -> pd.DataFrame:
-        """6通貨ペアのリアルタイムレート（Ticker）を取得"""
+        """対象7通貨ペアのリアルタイムレート（Ticker）を取得"""
         url = f"{self.BASE_URL}/ticker"
 
         for attempt in range(1, max_retries + 1):
@@ -54,10 +55,6 @@ class FXDataFetcher:
         """Tickerデータ（現在価格情報）を一括取得して返すラッパー"""
         print("GMOコイン APIよりデータ一括取得中...")
         return self.fetch_tickers(max_retries=max_retries)
-
-    def fetch_all_orderbooks(self) -> pd.DataFrame:
-        """FX APIには板情報がないため空のDataFrameを返す"""
-        return pd.DataFrame()
 
 
 if __name__ == "__main__":
