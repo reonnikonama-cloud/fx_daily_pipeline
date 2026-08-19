@@ -23,14 +23,16 @@ class BacktestVisualizer:
         if df_day.empty:
             return
 
+        digits = 5 if "USD" in pair_title and "JPY" not in pair_title else 3
+
         fig, ax = plt.subplots(figsize=(12, 5), dpi=100)
 
         ax.plot(df_day.index, df_day["Close"], color="#1f77b4", linewidth=1.5, label="Close")
 
         day_high = df_day["High"].max()
         day_low = df_day["Low"].min()
-        ax.axhline(day_high, color="#d62728", linestyle="--", alpha=0.6, linewidth=1, label=f"High: {day_high:.3f}")
-        ax.axhline(day_low, color="#2ca02c", linestyle="--", alpha=0.6, linewidth=1, label=f"Low: {day_low:.3f}")
+        ax.axhline(day_high, color="#d62728", linestyle="--", alpha=0.6, linewidth=1, label=f"High: {day_high:.{digits}f}")
+        ax.axhline(day_low, color="#2ca02c", linestyle="--", alpha=0.6, linewidth=1, label=f"Low: {day_low:.{digits}f}")
 
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
         ax.grid(True, linestyle=":", alpha=0.6)
