@@ -67,9 +67,12 @@ class JSONStorage:
 
         df = pd.DataFrame(records)
 
-        # ISO形式タイムスタンプをDatetime化 & JST変換
-        df["Datetime"] = pd.to_datetime(df["timestamp"])
+        # ISO 8601形式の文字列を柔軟にDatetime変換
+        df["Datetime"] = pd.to_datetime(df["timestamp"], format="ISO8601", errors="coerce")
+        df.dropna(subset=["Datetime"], inplace=True)
         df.set_index("Datetime", inplace=True)
+
+        # UTCからJST（日本標準時）へ変換
         if df.index.tz is None:
             df.index = df.index.tz_localize("UTC").tz_convert("Asia/Tokyo")
         else:
