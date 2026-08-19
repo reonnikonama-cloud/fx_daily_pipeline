@@ -17,6 +17,7 @@ class FXDataFetcher:
         "AUD_JPY": "AUD_JPY",
         "CHF_JPY": "CHF_JPY",
         "NZD_JPY": "NZD_JPY",
+        "CAD_JPY": "CAD_JPY",
         "EUR_USD": "EUR_USD",
     }
 
@@ -24,7 +25,7 @@ class FXDataFetcher:
         self.pairs = pairs if pairs else self.DEFAULT_PAIRS
 
     def fetch_tickers(self, max_retries: int = 3) -> pd.DataFrame:
-        """対象7通貨ペアのリアルタイムレート（Ticker）を取得"""
+        """対象8通貨ペアのリアルタイムレート（Ticker）を取得"""
         url = f"{self.BASE_URL}/ticker"
 
         for attempt in range(1, max_retries + 1):
