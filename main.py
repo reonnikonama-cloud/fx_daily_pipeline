@@ -61,22 +61,26 @@ def main():
         df_ticker = tickers_df[tickers_df["symbol"] == symbol].copy() if not tickers_df.empty else pd.DataFrame()
 
         if not df_ticker.empty:
-            # 取得データを時系列DataFrameとして整形
+            # GMOコイン Ticker のキー構造に安全に対応 (bid/ask)
+            bid_price = float(df_ticker["bid"].values[0]) if "bid" in df_ticker.columns else 0.0
+            ask_price = float(df_ticker["ask"].values[0]) if "ask" in df_ticker.columns else 0.0
+
+            # 単発取得のデータポイントとして整形
             row_data = {
-                "Open": float(df_ticker["bid"].values[0]),
-                "High": float(df_ticker["high"].values[0]) if "high" in df_ticker.columns else float(df_ticker["bid"].values[0]),
-                "Low": float(df_ticker["low"].values[0]) if "low" in df_ticker.columns else float(df_ticker["bid"].values[0]),
-                "Close": float(df_ticker["bid"].values[0]),
-                "Ask": float(df_ticker["ask"].values[0]),
-                "Volume": float(df_ticker["volume"].values[0]) if "volume" in df_ticker.columns else 0.0,
+                "Open": bid_price,
+                "High": bid_price,
+                "Low": bid_price,
+                "Close": bid_price,
+                "Ask": ask_price,
+                "Volume": 0.0,
             }
 
             # 板情報（買板・売板比率）があれば結合
             if not orderbooks_df.empty and symbol in orderbooks_df["symbol"].values:
                 ob_row = orderbooks_df[orderbooks_df["symbol"] == symbol].iloc[0]
-                row_data["BidRatio"] = ob_row["bid_ratio"]
-                row_data["AskRatio"] = ob_row["ask_ratio"]
-                row_data["Sentiment"] = ob_row["sentiment"]
+                row_data["BidRatio"] = ob_row.get("bid_ratio", 50.0)
+                row_data["AskRatio"] = ob_row.get("ask_ratio", 50.0)
+                row_data["Sentiment"] = ob_row.get("sentiment", "拮抗")
 
             df_single = pd.DataFrame([row_data], index=[now_ts])
 
