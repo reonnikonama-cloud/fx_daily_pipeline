@@ -16,7 +16,7 @@ class FXDailyReporter:
         if "USD" in pair_name and "JPY" not in pair_name:
             # 対米ドル（例: EUR_USD）
             return 0.0001, 5
-        # 対円（例: USD_JPY, EUR_JPY等）
+        # 対円（例: USD_JPY, EUR_JPY, NZD_JPY, CAD_JPY等）
         return 0.01, 3
 
     def extract_verified_full_day_with_logging(
@@ -28,10 +28,18 @@ class FXDailyReporter:
                 self.logger.error("データなし", f"[{pair_label}] 入力データフレームが空です。")
             return pd.DataFrame()
 
+        # インデックスが DatetimeIndex でない場合の安全策補正
+        if not isinstance(df.index, pd.DatetimeIndex):
+            df.index = pd.to_datetime(df.index, utc=True, errors="coerce")
+            df = df[df.index.notnull()]
+            df.index = df.index.tz_convert("Asia/Tokyo")
+
         if target_date is None:
             target_date = (datetime.now() - timedelta(days=1)).date()
 
+        # 日付フィルタリング（DatetimeIndexから安全にdate抽出）
         df_day = df[df.index.date == target_date].sort_index()
+
         if df_day.empty:
             if self.logger:
                 self.logger.warning("対象データなし", f"[{pair_label}] [{target_date}] のデータが存在しません。")
@@ -94,23 +102,17 @@ class FXDailyReporter:
         change_pips = (close_p - open_p) / pips_value
         target_date_str = df_day.index[0].strftime("%Y-%m-%d")
 
-        # 最新の板情報感応度があれば追加テキスト化
-        sentiment_info = ""
-        if "Sentiment" in df_day.columns:
-            latest_sentiment = df_day["Sentiment"].iloc[-1]
-            sentiment_info = f"\n・最終板状況   : {latest_sentiment}"
-
         fmt = f"{{:.{digits}f}}"
 
         return (
             f"📊 **【{pair_name}】日次確定レポート ({target_date_str})**\n"
             f"```text\n"
-            f"・始値 (Open)   : {fmt.format(open_p)}\n"
-            f"・高値 (High)   : {fmt.format(high_p)}\n"
-            f"・安値 (Low)    : {fmt.format(low_p)}\n"
-            f"・終値 (Close)  : {fmt.format(close_p)}\n"
+            f"・始値 (Open)    : {fmt.format(open_p)}\n"
+            f"・高値 (High)    : {fmt.format(high_p)}\n"
+            f"・安値 (Low)     : {fmt.format(low_p)}\n"
+            f"・終値 (Close)   : {fmt.format(close_p)}\n"
             f"----------------------------------------\n"
             f"・日中値幅     : {range_pips:.1f} pips\n"
-            f"・前日比変動   : {change_pips:+.1f} pips{sentiment_info}\n"
+            f"・前日比変動   : {change_pips:+.1f} pips\n"
             f"```"
         )
