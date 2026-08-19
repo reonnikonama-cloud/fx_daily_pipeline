@@ -34,7 +34,7 @@ def main():
     logger = SystemLogger(webhook_url=LOG_WEBHOOK_URL)
     fetcher = FXDataFetcher(pairs=PAIRS)
     storage = JSONStorage(base_dir=BASE_DATA_DIR)
-    reporter = FXDailyReporter(pips_value=0.01, logger=logger)
+    reporter = FXDailyReporter(logger=logger)
 
     target_date = (datetime.now() - timedelta(days=1)).date()
 
