@@ -8,9 +8,16 @@ from src.system_logger import SystemLogger
 class FXDailyReporter:
     """日次確定データの検証およびサマリーレポート生成"""
 
-    def __init__(self, pips_value: float = 0.01, logger: SystemLogger = None):
-        self.pips_value = pips_value
+    def __init__(self, logger: SystemLogger = None):
         self.logger = logger
+
+    def _get_pair_config(self, pair_name: str) -> tuple[float, int]:
+        """通貨ペアに応じた pips 基準値と表示桁数を取得"""
+        if "USD" in pair_name and "JPY" not in pair_name:
+            # 対米ドル（例: EUR_USD）
+            return 0.0001, 5
+        # 対円（例: USD_JPY, EUR_JPY等）
+        return 0.01, 3
 
     def extract_verified_full_day_with_logging(
         self, df: pd.DataFrame, target_date: date = None, pair_label: str = ""
@@ -32,6 +39,7 @@ class FXDailyReporter:
 
         total_expected = 288
         actual_count = len(df_day)
+        _, digits = self._get_pair_config(pair_label)
 
         if self.logger:
             self.logger.info(
@@ -75,24 +83,34 @@ class FXDailyReporter:
         if df_day.empty:
             return ""
 
+        pips_value, digits = self._get_pair_config(pair_name)
+
         open_p = float(df_day["Open"].iloc[0])
         high_p = float(df_day["High"].max())
         low_p = float(df_day["Low"].min())
         close_p = float(df_day["Close"].iloc[-1])
 
-        range_pips = (high_p - low_p) / self.pips_value
-        change_pips = (close_p - open_p) / self.pips_value
+        range_pips = (high_p - low_p) / pips_value
+        change_pips = (close_p - open_p) / pips_value
         target_date_str = df_day.index[0].strftime("%Y-%m-%d")
+
+        # 最新の板情報感応度があれば追加テキスト化
+        sentiment_info = ""
+        if "Sentiment" in df_day.columns:
+            latest_sentiment = df_day["Sentiment"].iloc[-1]
+            sentiment_info = f"\n・最終板状況   : {latest_sentiment}"
+
+        fmt = f"{{:.{digits}f}}"
 
         return (
             f"📊 **【{pair_name}】日次確定レポート ({target_date_str})**\n"
             f"```text\n"
-            f"・始値 (Open)   : {open_p:.3f}\n"
-            f"・高値 (High)   : {high_p:.3f}\n"
-            f"・安値 (Low)    : {low_p:.3f}\n"
-            f"・終値 (Close)  : {close_p:.3f}\n"
+            f"・始値 (Open)   : {fmt.format(open_p)}\n"
+            f"・高値 (High)   : {fmt.format(high_p)}\n"
+            f"・安値 (Low)    : {fmt.format(low_p)}\n"
+            f"・終値 (Close)  : {fmt.format(close_p)}\n"
             f"----------------------------------------\n"
             f"・日中値幅     : {range_pips:.1f} pips\n"
-            f"・前日比変動   : {change_pips:+.1f} pips\n"
+            f"・前日比変動   : {change_pips:+.1f} pips{sentiment_info}\n"
             f"```"
         )
