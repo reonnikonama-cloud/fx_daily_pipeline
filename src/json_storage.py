@@ -67,16 +67,13 @@ class JSONStorage:
 
         df = pd.DataFrame(records)
 
-        # ISO 8601形式の文字列を柔軟にDatetime変換
-        df["Datetime"] = pd.to_datetime(df["timestamp"], format="ISO8601", errors="coerce")
+        # utc=True を指定して UTC DatetimeIndex として変換（FutureWarningおよびtzエラーの回避）
+        df["Datetime"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
         df.dropna(subset=["Datetime"], inplace=True)
         df.set_index("Datetime", inplace=True)
 
-        # UTCからJST（日本標準時）へ変換
-        if df.index.tz is None:
-            df.index = df.index.tz_localize("UTC").tz_convert("Asia/Tokyo")
-        else:
-            df.index = df.index.tz_convert("Asia/Tokyo")
+        # JST（日本標準時）へ変換
+        df.index = df.index.tz_convert("Asia/Tokyo")
 
         # 数値型へ変換
         df["bid"] = df["bid"].astype(float)
