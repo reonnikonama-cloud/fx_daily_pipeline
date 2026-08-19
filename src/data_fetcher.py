@@ -10,7 +10,6 @@ class FXDataFetcher:
 
     BASE_URL = "https://forex-api.coin.z.com/public/v1"
 
-    # デフォルトの対象6通貨ペア
     DEFAULT_PAIRS = {
         "USD_JPY": "USD_JPY",
         "EUR_JPY": "EUR_JPY",
@@ -37,7 +36,6 @@ class FXDataFetcher:
                     tickers = data.get("data", [])
                     df = pd.DataFrame(tickers)
 
-                    # 指定された6通貨ペアに絞り込み
                     target_symbols = list(self.pairs.values())
                     df_filtered = df[df["symbol"].isin(target_symbols)].copy()
 
@@ -51,6 +49,14 @@ class FXDataFetcher:
             time.sleep(attempt * 2)
 
         return pd.DataFrame()
+
+    def fetch_bulk_data_with_retry(self, max_retries: int = 5) -> pd.DataFrame:
+        """
+        [main.py 互換用]
+        Tickerデータ（現在価格情報）を一括取得して返すラッパーメソッド
+        """
+        print(f"GMOコイン APIよりデータ一括取得中...")
+        return self.fetch_tickers(max_retries=max_retries)
 
     def fetch_orderbook(self, symbol: str) -> dict:
         """
@@ -67,8 +73,8 @@ class FXDataFetcher:
             if data.get("status") != 0:
                 return {}
 
-            asks = data["data"]["asks"]  # 売り注文
-            bids = data["data"]["bids"]  # 買い注文
+            asks = data["data"]["asks"]
+            bids = data["data"]["bids"]
 
             total_ask_size = sum(float(item["size"]) for item in asks)
             total_bid_size = sum(float(item["size"]) for item in bids)
@@ -99,19 +105,12 @@ class FXDataFetcher:
             ob = self.fetch_orderbook(symbol)
             if ob:
                 orderbooks.append(ob)
-            time.sleep(0.1)  # API負荷軽減用のわずかなウェイト
+            time.sleep(0.1)
 
         return pd.DataFrame(orderbooks)
 
 
-# テスト実行用
 if __name__ == "__main__":
     fetcher = FXDataFetcher()
-
-    print("=== Ticker 取得テスト ===")
-    tickers_df = fetcher.fetch_tickers()
-    print(tickers_df[["symbol", "bid", "ask", "high", "low"]])
-
-    print("\n=== Orderbook 需給分析取得テスト ===")
-    orderbook_df = fetcher.fetch_all_orderbooks()
-    print(orderbook_df[["symbol", "best_bid", "best_ask", "bid_ratio", "ask_ratio", "sentiment"]])
+    df = fetcher.fetch_bulk_data_with_retry()
+    print(df)
