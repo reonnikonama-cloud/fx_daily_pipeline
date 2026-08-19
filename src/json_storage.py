@@ -34,8 +34,14 @@ class JSONStorage:
             "high": float(latest_row["High"].iloc[0]),
             "low": float(latest_row["Low"].iloc[0]),
             "close": float(latest_row["Close"].iloc[0]),
-            "volume": int(latest_row["Volume"].iloc[0]) if "Volume" in latest_row else 0,
+            "volume": float(latest_row["Volume"].iloc[0]) if "Volume" in latest_row else 0.0,
         }
+
+        # 板情報（Orderbook）が存在すれば追記
+        if "BidRatio" in latest_row.columns:
+            new_record["bid_ratio"] = float(latest_row["BidRatio"].iloc[0])
+            new_record["ask_ratio"] = float(latest_row["AskRatio"].iloc[0])
+            new_record["sentiment"] = str(latest_row["Sentiment"].iloc[0])
 
         pair_dir = os.path.join(self.base_dir, symbol)
         os.makedirs(pair_dir, exist_ok=True)
@@ -92,6 +98,9 @@ class JSONStorage:
                 "low": "Low",
                 "close": "Close",
                 "volume": "Volume",
+                "bid_ratio": "BidRatio",
+                "ask_ratio": "AskRatio",
+                "sentiment": "Sentiment",
             },
             inplace=True,
         )
