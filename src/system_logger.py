@@ -1,7 +1,10 @@
 # src/system_logger.py
 
 from datetime import datetime
+import pytz
 from src.discord_client import DiscordClient
+
+JST = pytz.timezone("Asia/Tokyo")
 
 
 class SystemLogger:
@@ -11,13 +14,14 @@ class SystemLogger:
         self.webhook_url = webhook_url
 
     def _log(self, level: str, title: str, message: str, color_emoji: str):
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # サーバー環境（UTC）であっても JST の現在時刻を取得してフォーマット
+        timestamp = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
         content = (
             f"{color_emoji} **[{level}] {title}** (`{timestamp}`)\n"
             f"```text\n{message}\n```"
         )
 
-        print(f"[{level}] {title}: {message}")
+        print(f"[{level}] {title} ({timestamp}): {message}")
 
         if self.webhook_url:
             DiscordClient.send_message(self.webhook_url, content)
