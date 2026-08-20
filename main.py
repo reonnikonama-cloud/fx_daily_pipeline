@@ -4,6 +4,7 @@ import os
 import time
 from datetime import datetime, timedelta
 import pandas as pd
+import pytz
 
 from src.data_fetcher import FXDataFetcher
 from src.json_storage import JSONStorage
@@ -29,6 +30,7 @@ PAIRS = {
 }
 
 BASE_DATA_DIR = "data"
+JST = pytz.timezone("Asia/Tokyo")
 
 
 def main():
@@ -38,11 +40,13 @@ def main():
     storage = JSONStorage(base_dir=BASE_DATA_DIR)
     reporter = FXDailyReporter(logger=logger)
 
-    target_date = (datetime.now() - timedelta(days=1)).date()
+    # 日本時間 (JST) 基準で現在日時と前日日付を取得
+    now_jst = datetime.now(JST)
+    target_date = (now_jst - timedelta(days=1)).date()
 
     logger.info(
         "パイプライン起動",
-        "GMOコイン APIより実行時刻の最新TICKER生データを取得し `data/{symbol}/data.json` に保存します。",
+        f"GMOコイン APIより実行時刻({now_jst.strftime('%Y-%m-%d %H:%M:%S')} JST)の最新TICKER生データを取得し `data/{{symbol}}/data.json` に保存します。",
     )
 
     # 1. 最新価格（Ticker）の取得
@@ -77,6 +81,8 @@ def main():
             if df_accumulated.empty:
                 continue
 
+            # load_pair_data は JST タイムゾーン付き DatetimeIndex になっているため
+            # .date で比較すれば完全に JST の日付(target_date)で正しくフィルタリングされます
             df_day = df_accumulated[df_accumulated.index.date == target_date].sort_index()
             actual_count = len(df_day)
 
