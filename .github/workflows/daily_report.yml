@@ -2,7 +2,7 @@ name: FX Daily Report Pipeline
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # 例: 5分おきに自動実行する場合
+    - cron: '*/5 * * * *' # 5分おきに自動実行
   workflow_dispatch:      # 手動実行ボタン
 
 jobs:
@@ -39,4 +39,11 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: auto-update market data [skip ci]" && git pull --rebase origin main && git push)
+          
+          # 価格変化がなく diff が空の場合でもエラー終了せず、確実に追記データをコミット＆Push
+          if git commit -m "chore: auto-update market data [skip ci]"; then
+            git pull --rebase origin main
+            git push
+          else
+            echo "No changes to commit. Proceeding normally."
+          fi
