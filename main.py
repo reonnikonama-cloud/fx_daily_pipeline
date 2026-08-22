@@ -55,8 +55,9 @@ def main():
         logger.error("取得失敗", "GMOコイン APIからのデータ取得に失敗しました。")
         return
 
-    # 2. JSONファイルへの生データ追記・保存
+    # 2. JSONファイルへの生データ追記・保存 (status: OPEN のみ対象)
     save_any = False
+    skipped_pairs = []
 
     for pair_name, symbol in PAIRS.items():
         df_ticker = tickers_df[tickers_df["symbol"] == symbol].copy() if not tickers_df.empty else pd.DataFrame()
@@ -65,14 +66,26 @@ def main():
             # レスポンスの dict をそのまま抽出
             raw_record = df_ticker.iloc[0].to_dict()
 
-            if storage.append_raw_ticker(symbol, raw_record):
-                save_any = True
+            # status が OPEN のデータのみ保存対象とする
+            if raw_record.get("status") == "OPEN":
+                if storage.append_raw_ticker(symbol, raw_record):
+                    save_any = True
+            else:
+                skipped_pairs.append(symbol)
+
+    if skipped_pairs:
+        logger.info("休場スキップ", f"市場休場中(CLOSE)のため以下のペアの追記をスキップしました: {', '.join(skipped_pairs)}")
 
     if not save_any:
-        logger.error("JSON追記失敗", f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。")
-        return
+        # 土日などで全ペアが休場中だった場合はエラーで落ちさせず正常終了する
+        if len(skipped_pairs) == len(PAIRS):
+            logger.info("全ペア休場中", "すべての通貨ペアが市場休場中のため、本回の保存処理をスキップし正常終了します。")
+            return
+        else:
+            logger.error("JSON追記失敗", f"`{BASE_DATA_DIR}/{{symbol}}/data.json` への追記に失敗しました。")
+            return
 
-    logger.info("JSON追記完了", "全対象8ペアの最新生データの追記・保存処理が完了しました。")
+    logger.info("JSON追記完了", "営業中ペアの最新生データの追記・保存処理が完了しました。")
 
     # 3. 蓄積データの検証・チャート生成・レポート送信
     for pair_name, symbol in PAIRS.items():
