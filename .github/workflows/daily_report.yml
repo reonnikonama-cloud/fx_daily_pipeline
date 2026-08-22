@@ -30,6 +30,8 @@ jobs:
         env:
           DISCORD_REPORT_WEBHOOK_URL: ${{ secrets.DISCORD_REPORT_WEBHOOK_URL }}
           DISCORD_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_LOG_WEBHOOK_URL }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
         run: |
           python main.py
 
@@ -38,9 +40,9 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/
+          git add data/ || true
           
-          # 価格変化がなく diff が空の場合でもエラー終了せず、確実に追記データをコミット＆Push
+          # 差分がある場合のみコミットし、差分がなくてもエラーにせず正常終了
           if git commit -m "chore: auto-update market data [skip ci]"; then
             git pull --rebase origin main
             git push
