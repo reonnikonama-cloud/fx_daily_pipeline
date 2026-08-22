@@ -8,6 +8,7 @@ import pytz
 
 from src.data_fetcher import FXDataFetcher
 from src.json_storage import JSONStorage
+from src.sheets_storage import GoogleSheetsStorage
 from src.system_logger import SystemLogger
 from src.daily_reporter import FXDailyReporter
 from src.visualizer import BacktestVisualizer
@@ -39,6 +40,7 @@ def main():
     fetcher = FXDataFetcher(pairs=PAIRS)
     storage = JSONStorage(base_dir=BASE_DATA_DIR)
     reporter = FXDailyReporter(logger=logger)
+    sheets_storage = GoogleSheetsStorage(logger=logger)
 
     # 日本時間 (JST) 基準で現在日時と前日日付を取得
     now_jst = datetime.now(JST)
@@ -87,7 +89,7 @@ def main():
 
     logger.info("JSON追記完了", "営業中ペアの最新生データの追記・保存処理が完了しました。")
 
-    # 3. 蓄積データの検証・チャート生成・レポート送信
+    # 3. 蓄積データの検証・チャート生成・レポート送信・Sheets書き込み
     for pair_name, symbol in PAIRS.items():
         try:
             df_accumulated = storage.load_pair_data(symbol)
@@ -99,11 +101,11 @@ def main():
             df_day = df_accumulated[df_accumulated.index.date == target_date].sort_index()
             actual_count = len(df_day)
 
-            # 蓄積数が288本（5分足×24時間分）に達したら確定レポート処理
+            # 蓄積数が288本（5分足×24時間分）に達したら確定処理
             if actual_count == 288:
                 logger.info(
                     "完全データ検知",
-                    f"[{pair_name}] 前日[{target_date}] の288本蓄積完了を確認。レポート処理を開始します。",
+                    f"[{pair_name}] 前日[{target_date}] の288本蓄積完了を確認。処理を開始します。",
                 )
 
                 df_verified = reporter.extract_verified_full_day_with_logging(
@@ -111,7 +113,10 @@ def main():
                 )
 
                 if not df_verified.empty:
-                    # チャート描画
+                    # ① Googleスプレッドシートへの追記
+                    sheets_storage.append_daily_data(symbol, df_verified)
+
+                    # ② チャート描画
                     chart_filename = f"chart_{symbol}.png"
                     BacktestVisualizer.plot_daily_line_chart(
                         df_verified,
@@ -120,7 +125,7 @@ def main():
                         save_path=chart_filename,
                     )
 
-                    # レポート生成 & 送信
+                    # ③ レポート生成 & 送信
                     report_text = reporter.generate_report_text(df_verified, pair_name=pair_name)
                     success = DiscordClient.send_multipart(
                         REPORT_WEBHOOK_URL, report_text, image_path=chart_filename
