@@ -1,13 +1,18 @@
 # src/daily_reporter.py
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 class FXDailyReporter:
     """日次市場データの集計および Discord レポート用テキスト生成クラス"""
 
-    @classmethod
-    def generate_report(cls, pair_name: str, target_date: str, records: List[Dict[str, Any]]) -> str:
+    def __init__(self, logger: Optional[Any] = None) -> None:
+        """
+        初期化（main.py から logger が渡されても対応できるように実装）
+        """
+        self.logger = logger
+
+    def generate_report(self, pair_name: str, target_date: str, records: List[Dict[str, Any]]) -> str:
         """
         1日分のデータから統計量を計算し、レポート文面を生成する
         """
@@ -30,7 +35,7 @@ class FXDailyReporter:
         change_pct = (price_diff / open_price) * 100
 
         # pips の計算（クロス円は 0.01 = 1 pip、EUR_USD 等のドルストレートは 0.0001 = 1 pip）
-        is_jpy_pair = "JPY" in pair_name
+        is_jpy_pair = "JPY" in pair_name or "円" in pair_name
         pips_multiplier = 100.0 if is_jpy_pair else 10000.0
         pips_diff = price_diff * pips_multiplier
 
