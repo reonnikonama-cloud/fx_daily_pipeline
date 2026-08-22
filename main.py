@@ -9,6 +9,7 @@ import pytz
 from src.data_fetcher import FXDataFetcher
 from src.json_storage import JSONStorage
 from src.sheets_storage import GoogleSheetsStorage
+from src.ai_reporter import GeminiAIReporter
 from src.system_logger import SystemLogger
 from src.daily_reporter import FXDailyReporter
 from src.visualizer import BacktestVisualizer
@@ -41,6 +42,7 @@ def main():
     storage = JSONStorage(base_dir=BASE_DATA_DIR)
     reporter = FXDailyReporter(logger=logger)
     sheets_storage = GoogleSheetsStorage(logger=logger)
+    ai_reporter = GeminiAIReporter(logger=logger)
 
     # 日本時間 (JST) 基準で現在日時と前日日付を取得
     now_jst = datetime.now(JST)
@@ -89,7 +91,7 @@ def main():
 
     logger.info("JSON追記完了", "営業中ペアの最新生データの追記・保存処理が完了しました。")
 
-    # 3. 蓄積データの検証・チャート生成・レポート送信・Sheets書き込み
+    # 3. 蓄積データの検証・チャート生成・レポート送信・Sheets書き込み・AIレポート生成
     for pair_name, symbol in PAIRS.items():
         try:
             df_accumulated = storage.load_pair_data(symbol)
@@ -113,10 +115,18 @@ def main():
                 )
 
                 if not df_verified.empty:
-                    # ① Googleスプレッドシートへの追記
+                    # ① Googleスプレッドシートへの自動追記（年別横並び対応）
                     sheets_storage.append_daily_data(symbol, df_verified)
 
-                    # ② チャート描画
+                    # ② Geminiによる時系列ニュース検索＆AI分析レポートの生成
+                    ai_report_text = ai_reporter.generate_timeline_report(
+                        pair_name=pair_name,
+                        symbol=symbol,
+                        target_date=target_date,
+                        df_day=df_verified,
+                    )
+
+                    # ③ チャート描画
                     chart_filename = f"chart_{symbol}.png"
                     BacktestVisualizer.plot_daily_line_chart(
                         df_verified,
@@ -125,14 +135,19 @@ def main():
                         save_path=chart_filename,
                     )
 
-                    # ③ レポート生成 & 送信
-                    report_text = reporter.generate_report_text(df_verified, pair_name=pair_name)
+                    # ④ 基本数値レポート ＋ Gemini AI時系列レポートを結合して送信
+                    basic_report_text = reporter.generate_report_text(df_verified, pair_name=pair_name)
+                    
+                    full_report = basic_report_text
+                    if ai_report_text:
+                        full_report += f"\n\n{ai_report_text}"
+
                     success = DiscordClient.send_multipart(
-                        REPORT_WEBHOOK_URL, report_text, image_path=chart_filename
+                        REPORT_WEBHOOK_URL, full_report, image_path=chart_filename
                     )
 
                     if success:
-                        logger.info("送信完了", f"[{pair_name}] の確定日次レポートを送信しました。")
+                        logger.info("送信完了", f"[{pair_name}] の確定日次レポート（AI分析付き）を送信しました。")
 
                     if os.path.exists(chart_filename):
                         os.remove(chart_filename)
