@@ -3,13 +3,13 @@
 from typing import List, Dict, Any
 
 
-class DailyReporter:
+class FXDailyReporter:
     """日次市場データの集計および Discord レポート用テキスト生成クラス"""
 
-    @staticmethod
-    def generate_report(pair_name: str, target_date: str, records: List[Dict[str, Any]]) -> str:
+    @classmethod
+    def generate_report(cls, pair_name: str, target_date: str, records: List[Dict[str, Any]]) -> str:
         """
-        1日分（288本または720本）のデータから統計量を計算し、レポート文面を生成する
+        1日分のデータから統計量を計算し、レポート文面を生成する
         """
         if not records:
             return f"⚠️ **[{pair_name}]** {target_date} のデータが存在しません。"
