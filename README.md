@@ -1,17 +1,19 @@
 # FX Daily Pipeline 📈
 
-GMOコインのパブリック API から自動で主要 8 通貨ペアの 5 分足 TICKER データを収集・蓄積し、日次チャートの生成および Discord へのレポート自動送信を行うデータパイプラインシステムです。
+GMOコインのパブリック API から自動で主要 8 通貨ペアの 5 分足 TICKER データを収集・蓄積し、Google スプレッドシートへの保存、Gemini AI による時系列ニュース分析付きレポートの生成、および Discord への一体型レポート自動送信を行う全自動データパイプラインシステムです。
 
 ---
 
 ## 🌟 主な機能
 
-- **自動データ収集**: GMOコイン API より 5 分周期で最新の TICKER 生データを取得
-- **JST タイムゾーン自動統一**: 収集したデータを日本標準時（JST）で管理・永続化（月次でデータ自動分割）
-- **データ検証 & チャート生成**: 前日分（288本＝24時間）のデータが完全揃った段階で日次ラインチャートを自動生成
-- **Discord 連携**: 
-  - 確定日次レポート（要約情報＋チャート画像）を専用チャンネルへ配信
-  - パイプラインのシステムステータス・実行ログをリアルタイムで通知
+- **自動データ収集 & 休場自動スキップ**: GMOコイン API より 5 分周期で最新の TICKER 生データを取得（土日の市場休場時は自動判定してスキップ）。
+- **JST タイムゾーン完全統一**: 収集したデータを日本標準時（JST）で管理・永続化（月次/年次でデータを最適化保存）。
+- **Google スプレッドシート自動連携**: 前日データ確定時（288本＝24時間分）、年別・通貨ペア別にスプレッドシートへ自動保存・横展開。
+- **Gemini AI 時系列市場分析**: Google Search Grounding（検索連携）を活用し、前日の為替変動要因やニュースを自動検索して時系列レポートを生成。
+- **データ検証 & チャート生成**: 前日分の完全データを検証後、日次ラインチャート（画像）を自動描画。
+- **Discord 連携（一体型配信）**: 
+  - 通貨ペアごとに「基本数値サマリー ＋ Gemini AI分析テキスト ＋ チャート画像」を1つのメッセージにまとめて配信。
+  - パイプラインのシステムステータス・実行ログを専用チャンネルへリアルタイム通知。
 
 ---
 
@@ -30,23 +32,32 @@ GMOコインのパブリック API から自動で主要 8 通貨ペアの 5 分
 
 ---
 
-## 📁 ディレクトリ構造
+## ⚙️ 必要な環境変数 (Secrets)
+
+| 変数名 | 説明 |
+| :--- | :--- |
+| `GEMINI_API_KEY` | Google AI Studio で発行した Gemini API キー |
+| `GCP_SA_KEY_JSON` | Google Cloud サービスアカウントの JSON 鍵（Base64エンコード） |
+| `SPREADSHEET_ID` | 保存先 Google スプレッドシートの ID |
+| `DISCORD_REPORT_WEBHOOK_URL` | レポート送信用 Discord Webhook URL |
+| `DISCORD_LOG_WEBHOOK_URL` | システムログ送信用 Discord Webhook URL |
+
+---
+
+## 🏗 ディレクトリ構造
 
 ```text
 fx_daily_pipeline/
-├── .github/
-│   └── workflows/          # GitHub Actions 実行ワークフロー定義
-├── data/                    # 自動生成されるデータ蓄積フォルダ
-│   ├── USD_JPY/
-│   │   └── data.json
-│   └── ...
+├── data/                    # 通貨ペアごとのローカル蓄積データ
 ├── src/
-│   ├── data_fetcher.py     # GMOコイン API データ取得クラス
-│   ├── daily_reporter.py    # 日次レポートテキスト生成クラス
-│   ├── discord_client.py   # Discord Webhook 送信クライアント
-│   ├── json_storage.py     # JSON ストレージ管理クラス (JST変換/保存)
-│   ├── system_logger.py    # システム動作ログ管理クラス (JST時刻対応)
-│   └── visualizer.py       # チャート描画クラス
-├── main.py                  # メイン実行エントリポイント
-├── requirements.txt         # 依存ライブラリ一覧
-└── README.md                # 本ドキュメント
+│   ├── ai_reporter.py       # Gemini API + Web検索によるレポート生成
+│   ├── data_fetcher.py      # GMOコイン API データ取得
+│   ├── daily_reporter.py     # 日次データ検証・数値集計
+│   ├── discord_client.py    # Discord Webhook 送信
+│   ├── json_storage.py      # ローカル JSON 保存・管理
+│   ├── pipeline_manager.py  # 日次パイプライン制御（司令塔）
+│   ├── sheets_storage.py    # Google スプレッドシート自動保存
+│   ├── system_logger.py     # システムログ管理
+│   └── visualizer.py        # 日次チャート画像描画
+├── main.py                  # エントリーポイント
+└── README.md
