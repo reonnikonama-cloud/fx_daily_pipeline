@@ -1,5 +1,3 @@
-# src/ai_reporter.py
-
 import os
 import pandas as pd
 from datetime import date
@@ -23,8 +21,8 @@ class GeminiAIReporter:
             return
         try:
             genai.configure(api_key=self.api_key)
-            # 正しいモデル名を指定
-            self.model = genai.GenerativeModel("models/gemini-1.5-flash")
+            # 404エラー回避のため推奨モデル名（gemini-2.5-flash）に変更
+            self.model = genai.GenerativeModel("gemini-2.5-flash")
         except Exception as e:
             self.logger.error("AI認証失敗", f"Gemini API の初期化に失敗しました:\n{e}")
 
@@ -39,10 +37,25 @@ class GeminiAIReporter:
             df = df_day.copy()
             df.columns = df.columns.astype(str).str.lower()
 
-            open_price = float(df["open"].iloc[0]) if "open" in df.columns else None
-            high_price = float(df["high"].max()) if "high" in df.columns else None
-            low_price = float(df["low"].min()) if "low" in df.columns else None
-            close_price = float(df["close"].iloc[-1]) if "close" in df.columns else None
+            # ローソク足データ(open/high/low/close) または Tickerデータ(ask/bid等) の両方に対応できるロジック
+            if "open" in df.columns and "close" in df.columns:
+                open_price = float(df["open"].iloc[0])
+                high_price = float(df["high"].max()) if "high" in df.columns else None
+                low_price = float(df["low"].min()) if "low" in df.columns else None
+                close_price = float(df["close"].iloc[-1])
+            elif "bid" in df.columns:
+                # Ticker データが蓄積されている場合（bid/ask から概算）
+                open_price = float(df["bid"].iloc[0])
+                high_price = float(df["bid"].astype(float).max())
+                low_price = float(df["bid"].astype(float).min())
+                close_price = float(df["bid"].iloc[-1])
+            elif "ask" in df.columns:
+                open_price = float(df["ask"].iloc[0])
+                high_price = float(df["ask"].astype(float).max())
+                low_price = float(df["ask"].astype(float).min())
+                close_price = float(df["ask"].iloc[-1])
+            else:
+                return ""
 
             if None in (open_price, high_price, low_price, close_price):
                 return ""
