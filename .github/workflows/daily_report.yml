@@ -6,6 +6,9 @@ on:
     - cron: '58 14 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   generate-daily-report:
     runs-on: ubuntu-latest
