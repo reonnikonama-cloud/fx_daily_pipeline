@@ -19,11 +19,12 @@ class GeminiAIReporter:
     def _setup_client(self):
         """Gemini API クライアントの設定"""
         if not self.api_key:
-            self.logger.warning("AI設定不足", "GEMINI_API_KEY が設定されていません。AI分析はスキップされます。")
+            self.logger.warning("AI設定不足", "GEMINI_API_KEY が設定されていません。")
             return
         try:
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel("gemini-1.5-flash")
+            # 正しいモデル名を指定
+            self.model = genai.GenerativeModel("models/gemini-1.5-flash")
         except Exception as e:
             self.logger.error("AI認証失敗", f"Gemini API の初期化に失敗しました:\n{e}")
 
@@ -35,21 +36,17 @@ class GeminiAIReporter:
             return ""
 
         try:
-            # カラム名をすべて小文字に統一（表記揺れ対策）
             df = df_day.copy()
             df.columns = df.columns.astype(str).str.lower()
 
-            # 価格指標の取得
             open_price = float(df["open"].iloc[0]) if "open" in df.columns else None
             high_price = float(df["high"].max()) if "high" in df.columns else None
             low_price = float(df["low"].min()) if "low" in df.columns else None
             close_price = float(df["close"].iloc[-1]) if "close" in df.columns else None
 
             if None in (open_price, high_price, low_price, close_price):
-                self.logger.error("AIレポート生成エラー", f"[{pair_name}] 必要な価格カラム(open/high/low/close)が存在しません。")
                 return ""
 
-            # プロンプトの構築
             prompt = (
                 f"あなたはプロのFXアナリストです。以下のデータに基づいて、{pair_name}（対象日: {target_date}）の"
                 f"1日の相場動向（トレンド、ボラティリティ、注目点など）を3〜4行程度で要約・分析してください。\n\n"
