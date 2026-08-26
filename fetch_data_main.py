@@ -1,16 +1,17 @@
-# fetch_data_main.py
-
 import os
+import sys
 from src.system_logger import SystemLogger
 from src.json_storage import JSONStorage
-# ※既存のAPI取得モジュール（例: OANDA fetcher等）をインポート
-# from src.data_fetcher import OandaDataFetcher
+from src.data_fetcher import FXDataFetcher
 
 
 def main():
     log_webhook = os.getenv("DISCORD_SYSTEM_LOG_WEBHOOK_URL", "")
     logger = SystemLogger(webhook_url=log_webhook)
     storage = JSONStorage(base_dir="data")
+
+    # GMOコイン Public API 用インスタンス生成（認証不要）
+    fetcher = FXDataFetcher()
 
     pairs = {
         "米ドル/円": "USD_JPY",
@@ -22,16 +23,35 @@ def main():
         "ユーロ/ドル": "EUR_USD",
     }
 
-    logger.info("データ収集開始", "最新レートの取得・蓄積を開始します。")
+    logger.info("パイプライン起動", "GMOコイン APIよりレート一括取得を開始します。")
 
-    # TODO: 各通貨ペアのデータ取得＆JSONStorageへの追加保存処理
-    # 例:
-    # fetcher = OandaDataFetcher(...)
-    # for pair_name, symbol in pairs.items():
-    #     df_new = fetcher.get_latest_candles(symbol)
-    #     storage.save_pair_data(symbol, df_new)
+    try:
+        # 1. 一括で全通貨ペアの Ticker データを取得
+        df_tickers = fetcher.fetch_bulk_data_with_retry(max_retries=5)
 
-    logger.info("データ収集完了", "蓄積データの更新が完了しました。")
+        if df_tickers.empty:
+            logger.error("データ取得失敗", "Ticker データの取得結果が空でした。")
+            sys.exit(1)
+
+        success_count = 0
+
+        # 2. 通貨ペアごとに抽出して JSONStorage へ保存
+        for pair_name, symbol in pairs.items():
+            df_symbol = df_tickers[df_tickers["symbol"] == symbol]
+
+            if not df_symbol.empty:
+                # DataFrame または Dict 形式として渡す（json_storage の仕様に応じて変換）
+                data_to_save = df_symbol.to_dict(orient="records")
+                storage.save_pair_data(symbol, data_to_save)
+                success_count += 1
+            else:
+                logger.error("データ抽出スキップ", f"[{pair_name} ({symbol})] のデータが見つかりませんでした。")
+
+        logger.info("全処理完了", f"蓄積データの更新が完了しました。（成功: {success_count}/{len(pairs)}）")
+
+    except Exception as e:
+        logger.error("システムエラー", f"データ収集処理中に例外が発生しました: {str(e)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
