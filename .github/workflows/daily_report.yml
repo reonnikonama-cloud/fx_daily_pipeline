@@ -1,17 +1,14 @@
-name: FX Daily Report Pipeline
+name: FXデイリーレポート送信
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # 5分おきに自動実行
-  workflow_dispatch:      # 手動実行ボタン
+    # JST 23:58 (UTC 14:58) に定時実行
+    - cron: '58 14 * * *'
+  workflow_dispatch: # 手動実行用
 
 jobs:
-  run-pipeline:
+  run-daily-report:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write     # リポジトリへの書き込み権限を付与
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,47 +16,27 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python.python-version: '3.10'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run main pipeline
+      - name: Run Daily Report Script
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DISCORD_REPORT_WEBHOOK_URL: ${{ secrets.DISCORD_REPORT_WEBHOOK_URL }}
-          DISCORD_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_LOG_WEBHOOK_URL }}
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          DISCORD_SYSTEM_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_LOG_WEBHOOK_URL }}
+          GOOGLE_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # ← Gemini APIキーを追加
         run: |
-          python main.py
+          python run_daily_report.py
 
-      # 生成・追記された data/ ディレクトリをリポジトリに Safe Commit & Push
-      - name: Commit and push updated data.json
+      - name: Commit and push updated storage / logs
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # 1. 取得した変更データをステージング
-          git add data/ || true
-          
-          # 2. 変更差分がある場合のみコミット
-          if git commit -m "chore: auto-update market data [skip ci]"; then
-            # リモートの最新コミットを取得
-            git fetch origin main
-            
-            # rebase実行時に競合が発生した場合、ローカルのデータ（今回取得分）を最優先して自動解決
-            if ! git rebase -X ours origin/main; then
-              echo "Conflict detected during rebase. Resolving using local changes..."
-              git checkout --ours data/
-              git add data/
-              GIT_SEQUENCE_EDITOR=: git rebase --continue || git rebase --skip
-            fi
-            
-            # 安全にリモートへpush
-            git push origin main
-          else
-            echo "No changes to commit. Proceeding normally."
-          fi
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git diff-index --quiet HEAD || git commit -m "Auto-update daily report record"
+          git push
