@@ -2,7 +2,8 @@
 
 import os
 import time
-from datetime import date  # NameError対策のインポート
+import json
+from datetime import date
 import pandas as pd
 
 from src.json_storage import JSONStorage
@@ -24,6 +25,32 @@ class PipelineManager:
         self.ai_reporter = GeminiAIReporter(logger=logger)
         self.report_webhook_url = report_webhook_url
         self.logger = logger
+        self.sent_log_file = os.path.join(base_dir, "sent_reports.json")
+
+    def _is_already_sent(self, symbol: str, target_date: date) -> bool:
+        """指定日のレポートが送信済みかチェック"""
+        if not os.path.exists(self.sent_log_file):
+            return False
+        try:
+            with open(self.sent_log_file, "r", encoding="utf-8") as f:
+                sent_data = json.load(f)
+            return sent_data.get(symbol) == str(target_date)
+        except Exception:
+            return False
+
+    def _mark_as_sent(self, symbol: str, target_date: date):
+        """送信完了フラグを記録"""
+        sent_data = {}
+        if os.path.exists(self.sent_log_file):
+            try:
+                with open(self.sent_log_file, "r", encoding="utf-8") as f:
+                    sent_data = json.load(f)
+            except Exception:
+                sent_data = {}
+        
+        sent_data[symbol] = str(target_date)
+        with open(self.sent_log_file, "w", encoding="utf-8") as f:
+            json.dump(sent_data, f, ensure_ascii=False, indent=2)
 
     def process_daily_reports(self, pairs: dict, target_date: date):
         """指定日の蓄積データを確認し、集計・スプレッドシート・AI・Discord連携を実行"""
@@ -38,25 +65,23 @@ class PipelineManager:
                 )
 
     def _process_single_pair(self, pair_name: str, symbol: str, target_date: date):
+        # 送信済みチェック（同一日の連続送信をスキップ）
+        if self._is_already_sent(symbol, target_date):
+            return
+
         df_accumulated = self.storage.load_pair_data(symbol)
         if df_accumulated.empty:
             return
 
-        # 前日(target_date)のデータを抽出
         df_day = df_accumulated[df_accumulated.index.date == target_date].sort_index()
         actual_count = len(df_day)
 
         if actual_count == 0:
             return
 
-        # 曜日判定 (0: 月曜日, 1: 火曜日 ... 6: 日曜日)
-        # target_date が月曜日の場合、07:00オープン開始のため本数が少ない(約204本)
         is_monday = target_date.weekday() == 0
-
-        # 確定条件の閾値設定（月曜は200本以上、その他営業日は288本で確定）
         required_count = 200 if is_monday else 288
 
-        # 本数チェック ＋ 最終データが23:50以降まで存在するかチェック
         latest_time = df_day.index[-1].time()
         is_day_complete = (actual_count >= required_count) and (
             latest_time.hour == 23 and latest_time.minute >= 50
@@ -65,10 +90,9 @@ class PipelineManager:
         if is_day_complete:
             self.logger.info(
                 "完全データ検知",
-                f"[{pair_name}] 前日[{target_date}] (月曜特例: {is_monday}) のデータ確定({actual_count}本)を確認。処理を開始します。",
+                f"[{pair_name}] 前日[{target_date}] のデータ確定を確認。処理を開始します。",
             )
 
-            # メソッド名を extract_verified_full_day に修正
             df_verified = self.reporter.extract_verified_full_day(
                 df_accumulated, target_date=target_date, pair_label=pair_name
             )
@@ -88,7 +112,7 @@ class PipelineManager:
                 save_path=chart_filename,
             )
 
-            # 3. テキストレポート生成（基本数値 + AI分析）
+            # 3. テキストレポート生成
             basic_report = self.reporter.generate_report_text(
                 df_verified, pair_name=pair_name
             )
@@ -103,22 +127,18 @@ class PipelineManager:
             if ai_report:
                 full_report += f"\n\n{ai_report}"
 
-            # 4. Discordへの一括送信（画像＋AI分析テキストを1通にまとめる）
+            # 4. Discordへの送信
             success = DiscordClient.send_multipart(
                 self.report_webhook_url, full_report, image_path=chart_filename
             )
 
             if success:
+                # 送信成功時にフラグを記録
+                self._mark_as_sent(symbol, target_date)
                 self.logger.info(
                     "送信完了",
-                    f"[{pair_name}] の一体型日次レポート（画像＋AI分析付き）を送信しました。",
+                    f"[{pair_name}] の一体型日次レポートを送信しました。",
                 )
 
-            # 画像のクリーンアップ
             if os.path.exists(chart_filename):
                 os.remove(chart_filename)
-        else:
-            self.logger.info(
-                "データ蓄積中",
-                f"[{pair_name}] 前日[{target_date}] 蓄積本数: {actual_count}/{required_count}本 (最終データ: {latest_time})",
-            )
