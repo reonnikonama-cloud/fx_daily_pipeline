@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # 最新履歴を取得してプル時の競合を防止
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -36,9 +39,14 @@ jobs:
         run: |
           python run_daily_report.py
 
-      - name: Commit and push report logs / sheet records
+      - name: Commit and push cleared data and logs
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git diff-index --quiet HEAD || (git commit -m "Auto-update daily report record" && git pull --rebase origin main && git push)
+          # 差分がある場合のみコミットしてリモートの最新を取得後に push
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Chore: Auto-update daily report record and clear data.json"
+            git pull --rebase origin main
+            git push origin main
+          fi
