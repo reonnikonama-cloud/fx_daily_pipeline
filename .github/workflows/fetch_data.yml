@@ -37,5 +37,4 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git diff-index --quiet HEAD || git commit -m "Auto-update market data"
-          git push
+          git diff-index --quiet HEAD || (git commit -m "Auto-update market data" && git pull --rebase origin main && git push)
