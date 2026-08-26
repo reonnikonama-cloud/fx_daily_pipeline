@@ -15,6 +15,7 @@ def main():
     # GMOコイン Public API 用インスタンス生成（認証不要）
     fetcher = FXDataFetcher()
 
+    # 取得対象ペア定義（スイスフラン/円を追加）
     pairs = {
         "米ドル/円": "USD_JPY",
         "ユーロ/円": "EUR_JPY",
@@ -22,6 +23,7 @@ def main():
         "豪ドル/円": "AUD_JPY",
         "NZドル/円": "NZD_JPY",
         "カナダドル/円": "CAD_JPY",
+        "スイスフラン/円": "CHF_JPY",
         "ユーロ/ドル": "EUR_USD",
     }
 
@@ -37,7 +39,7 @@ def main():
 
         success_count = 0
 
-        # 2. 通貨ペアごとに抽出して JSONStorage へ保存
+        # 2. 通貨ペアごとに抽出して JSONStorage へ保存（フォルダ名は symbol に統一）
         for pair_name, symbol in pairs.items():
             df_symbol = df_tickers[df_tickers["symbol"] == symbol]
 
