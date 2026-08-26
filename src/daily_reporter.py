@@ -37,10 +37,14 @@ class FXDailyReporter:
         if df_day.empty:
             return f"【{pair_name}】データが存在しません。"
 
-        open_price = df_day["open"].iloc[0]
-        high_price = df_day["high"].max()
-        low_price = df_day["low"].min()
-        close_price = df_day["close"].iloc[-1]
+        # 列名をすべて小文字に統一して取得（KeyError防止）
+        df = df_day.copy()
+        df.columns = [str(c).lower() for c in df.columns]
+
+        open_price = float(df["open"].iloc[0]) if "open" in df.columns else 0.0
+        high_price = float(df["high"].max()) if "high" in df.columns else 0.0
+        low_price = float(df["low"].min()) if "low" in df.columns else 0.0
+        close_price = float(df["close"].iloc[-1]) if "close" in df.columns else 0.0
         
         change = close_price - open_price
         change_pips = change * 100 if "JPY" in pair_name or "円" in pair_name else change * 10000
