@@ -1,8 +1,11 @@
+# run_daily_report.py
+
 import os
 import sys
 from datetime import datetime, timezone, timedelta
 from src.system_logger import SystemLogger
 from src.pipeline_manager import PipelineManager
+from src.json_storage import JSONStorage
 
 
 def get_jst_now():
@@ -20,6 +23,7 @@ def main():
     spreadsheet_id = os.getenv("SPREADSHEET_ID", "")
 
     logger = SystemLogger(webhook_url=log_webhook)
+    storage = JSONStorage(base_dir="data")
 
     # PipelineManager の初期化（必要な環境変数を一括渡す）
     manager = PipelineManager(
@@ -38,6 +42,7 @@ def main():
         "豪ドル/円": "AUD_JPY",
         "NZドル/円": "NZD_JPY",
         "カナダドル/円": "CAD_JPY",
+        "スイスフラン/円": "CHF_JPY",  # スイスフランを追加
         "ユーロ/ドル": "EUR_USD",
     }
 
@@ -49,12 +54,17 @@ def main():
     else:
         target_date = now_jst.date()
 
-    logger.info("デイリーレポート開始", f"対象日: {target_date} (JST 23:58定時実行)")
+    logger.info("デイリーレポート開始", f"対象日: {target_date} (JST定時実行)")
 
     try:
-        # レポート集計・AI生成・Discord送信・シート保存を一括実行
+        # 1. レポート集計・AI生成・Discord送信・シート保存を一括実行
         manager.process_daily_reports(pairs, target_date=target_date)
-        logger.info("デイリーレポート完了", "処理が正常に終了しました。")
+        
+        # 2. 処理が正常に完了したら、重複転記防止のため各ペアの data.json をクリア
+        for pair_name, symbol in pairs.items():
+            storage.clear_pair_data(symbol)
+
+        logger.info("デイリーレポート完了", "処理が正常に終了し、ローカル蓄積データをクリアしました。")
     except Exception as e:
         logger.error("デイリーレポートエラー", f"実行中にエラーが発生しました: {str(e)}")
         sys.exit(1)
