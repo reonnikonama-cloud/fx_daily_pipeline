@@ -1,60 +1,56 @@
 # src/daily_reporter.py
 
-from typing import List, Dict, Any, Optional
+import pandas as pd
+from datetime import date
+from src.system_logger import SystemLogger
 
 
 class FXDailyReporter:
-    """日次市場データの集計および Discord レポート用テキスト生成クラス"""
+    """日次データの検証・整形およびテキストレポート生成クラス"""
 
-    def __init__(self, logger: Optional[Any] = None) -> None:
-        """
-        初期化（main.py から logger が渡されても対応できるように実装）
-        """
+    def __init__(self, logger: SystemLogger):
         self.logger = logger
 
-    def generate_report(self, pair_name: str, target_date: str, records: List[Dict[str, Any]]) -> str:
+    def extract_verified_full_day(self, df_accumulated: pd.DataFrame, target_date: date, pair_label: str = "") -> pd.DataFrame:
         """
-        1日分のデータから統計量を計算し、レポート文面を生成する
+        指定日(target_date)のデータを抽出し、検証済みのデータフレームを返す
         """
-        if not records:
-            return f"⚠️ **[{pair_name}]** {target_date} のデータが存在しません。"
+        if df_accumulated.empty:
+            return pd.DataFrame()
 
-        # 価格リスト抽出
-        closes = [r["close"] for r in records]
-        highs = [r["high"] for r in records]
-        lows = [r["low"] for r in records]
+        # 日付フィルタリング
+        df_day = df_accumulated[df_accumulated.index.date == target_date].sort_index()
 
-        # 統計量計算
-        open_price = records[0]["open"]
-        close_price = records[-1]["close"]
-        high_price = max(highs)
-        low_price = min(lows)
+        if df_day.empty:
+            self.logger.warning(
+                "データ抽出失敗",
+                f"[{pair_label}] 指定日[{target_date}] のデータが存在しません。"
+            )
+            return pd.DataFrame()
 
-        # 差分（変動幅）と変動率の計算
-        price_diff = close_price - open_price
-        change_pct = (price_diff / open_price) * 100
+        return df_day
 
-        # pips の計算（クロス円は 0.01 = 1 pip、EUR_USD 等のドルストレートは 0.0001 = 1 pip）
-        is_jpy_pair = "JPY" in pair_name or "円" in pair_name
-        pips_multiplier = 100.0 if is_jpy_pair else 10000.0
-        pips_diff = price_diff * pips_multiplier
+    def generate_report_text(self, df_day: pd.DataFrame, pair_name: str) -> str:
+        """
+        抽出された日次データから基本数値レポートテキストを生成
+        """
+        if df_day.empty:
+            return f"【{pair_name}】データが存在しません。"
 
-        # 符号表記の整形
-        sign = "+" if price_diff >= 0 else ""
-        price_fmt = ".3f" if is_jpy_pair else ".5f"
+        open_price = df_day["open"].iloc[0]
+        high_price = df_day["high"].max()
+        low_price = df_day["low"].min()
+        close_price = df_day["close"].iloc[-1]
+        
+        change = close_price - open_price
+        change_pips = change * 100 if "JPY" in pair_name or "円" in pair_name else change * 10000
 
-        # レポート文面組み立て
         report = (
-            f"📊 **【日次サマリー】{pair_name}** (`{target_date}`)\n"
-            f"```text\n"
-            f"・始値 (Open)  : {open_price:{price_fmt}}\n"
-            f"・終値 (Close) : {close_price:{price_fmt}}\n"
-            f"・高値 (High)  : {high_price:{price_fmt}}\n"
-            f"・安値 (Low)   : {low_price:{price_fmt}}\n"
-            f"----------------------------------------\n"
-            f"・変動幅 (pips): {sign}{pips_diff:.1f} pips\n"
-            f"・変動率 (%)   : {sign}{change_pct:.2f}%\n"
-            f"```"
+            f"📊 **【日次確定レポート】{pair_name}**\n"
+            f"・始値 (Open): {open_price:.3f}\n"
+            f"・高値 (High): {high_price:.3f}\n"
+            f"・安値 (Low): {low_price:.3f}\n"
+            f"・終値 (Close): {close_price:.3f}\n"
+            f"・日中変動: {change_pips:+.1f} pips"
         )
-
         return report
