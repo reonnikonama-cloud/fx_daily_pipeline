@@ -28,6 +28,20 @@ class JSONStorage:
 
         return success
 
+    def clear_pair_data(self, symbol: str) -> bool:
+        """デイリーレポート送信・転記完了後、指定された symbol の data.json を初期化（空配列にする）"""
+        json_path = os.path.join(self.base_dir, symbol, "data.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "w", encoding="utf-8") as f:
+                    json.dump([], f, ensure_ascii=False, indent=2)
+                print(f"[{symbol}] デイリー処理完了に伴い data.json をクリアしました。")
+                return True
+            except Exception as e:
+                print(f"[{symbol}] data.json クリア失敗: {e}")
+                return False
+        return True
+
     def append_raw_ticker(self, symbol: str, ticker_data: dict) -> bool:
         """APIから取得した Ticker 生データ（dict）に JST 変換を施し data.json へ追記"""
         if not ticker_data:
