@@ -36,17 +36,30 @@ jobs:
         run: |
           python main.py
 
-      # 生成・追記された data/ ディレクトリをリポジトリに Commit & Push
+      # 生成・追記された data/ ディレクトリをリポジトリに Safe Commit & Push
       - name: Commit and push updated data.json
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 1. 取得した変更データをステージング
           git add data/ || true
           
-          # 差分がある場合のみコミットし、差分がなくてもエラーにせず正常終了
+          # 2. 変更差分がある場合のみコミット
           if git commit -m "chore: auto-update market data [skip ci]"; then
-            git pull --rebase origin main
-            git push
+            # リモートの最新コミットを取得
+            git fetch origin main
+            
+            # rebase実行時に競合が発生した場合、ローカルのデータ（今回取得分）を最優先して自動解決
+            if ! git rebase -X ours origin/main; then
+              echo "Conflict detected during rebase. Resolving using local changes..."
+              git checkout --ours data/
+              git add data/
+              GIT_SEQUENCE_EDITOR=: git rebase --continue || git rebase --skip
+            fi
+            
+            # 安全にリモートへpush
+            git push origin main
           else
             echo "No changes to commit. Proceeding normally."
           fi
