@@ -35,20 +35,24 @@ class GeminiAIReporter:
             return ""
 
         try:
-            # カラム名をすべて小文字に統一（'Open'/'open' の表記揺れ対策）
+            # カラム名をすべて小文字に統一（表記揺れ対策）
             df = df_day.copy()
-            df.columns = [str(c).lower() for c in df.columns]
+            df.columns = df.columns.astype(str).str.lower()
 
-            # 各価格指標の取得
-            open_price = float(df["open"].iloc[0]) if "open" in df.columns else 0.0
-            high_price = float(df["high"].max()) if "high" in df.columns else 0.0
-            low_price = float(df["low"].min()) if "low" in df.columns else 0.0
-            close_price = float(df["close"].iloc[-1]) if "close" in df.columns else 0.0
+            # 価格指標の取得
+            open_price = float(df["open"].iloc[0]) if "open" in df.columns else None
+            high_price = float(df["high"].max()) if "high" in df.columns else None
+            low_price = float(df["low"].min()) if "low" in df.columns else None
+            close_price = float(df["close"].iloc[-1]) if "close" in df.columns else None
 
-            # プロンプトの作成
+            if None in (open_price, high_price, low_price, close_price):
+                self.logger.error("AIレポート生成エラー", f"[{pair_name}] 必要な価格カラム(open/high/low/close)が存在しません。")
+                return ""
+
+            # プロンプトの構築
             prompt = (
-                f"あなたはプロのFXアナリストです。以下のデータに基づいて、{pair_name}（{target_date}）の"
-                f"1日の相場動向を3〜4行程度で簡潔に要約・分析してください。\n\n"
+                f"あなたはプロのFXアナリストです。以下のデータに基づいて、{pair_name}（対象日: {target_date}）の"
+                f"1日の相場動向（トレンド、ボラティリティ、注目点など）を3〜4行程度で要約・分析してください。\n\n"
                 f"・始値: {open_price}\n"
                 f"・高値: {high_price}\n"
                 f"・安値: {low_price}\n"
@@ -56,7 +60,9 @@ class GeminiAIReporter:
             )
 
             response = self.model.generate_content(prompt)
-            return response.text.strip() if response.text else ""
+            if response and response.text:
+                return f"🤖 **【AI相場分析】**\n{response.text.strip()}"
+            return ""
 
         except Exception as e:
             self.logger.error(
