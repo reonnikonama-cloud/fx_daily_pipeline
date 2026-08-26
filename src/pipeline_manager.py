@@ -68,7 +68,8 @@ class PipelineManager:
                 f"[{pair_name}] 前日[{target_date}] (月曜特例: {is_monday}) のデータ確定({actual_count}本)を確認。処理を開始します。",
             )
 
-            df_verified = self.reporter.extract_verified_full_day_with_logging(
+            # メソッド名を extract_verified_full_day に修正
+            df_verified = self.reporter.extract_verified_full_day(
                 df_accumulated, target_date=target_date, pair_label=pair_name
             )
 
