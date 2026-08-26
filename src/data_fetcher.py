@@ -1,5 +1,3 @@
-# src/data_fetcher.py
-
 import time
 import requests
 import pandas as pd
