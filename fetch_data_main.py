@@ -1,3 +1,5 @@
+# fetch_data_main.py
+
 import os
 import sys
 from src.system_logger import SystemLogger
@@ -40,10 +42,12 @@ def main():
             df_symbol = df_tickers[df_tickers["symbol"] == symbol]
 
             if not df_symbol.empty:
-                # DataFrame または Dict 形式として渡す（json_storage の仕様に応じて変換）
+                # Dict 形式（リスト内辞書）として抽出し保存
                 data_to_save = df_symbol.to_dict(orient="records")
-                storage.save_pair_data(symbol, data_to_save)
-                success_count += 1
+                if storage.save_pair_data(symbol, data_to_save):
+                    success_count += 1
+                else:
+                    logger.error("保存失敗", f"[{pair_name} ({symbol})] のデータ保存に失敗しました。")
             else:
                 logger.error("データ抽出スキップ", f"[{pair_name} ({symbol})] のデータが見つかりませんでした。")
 
