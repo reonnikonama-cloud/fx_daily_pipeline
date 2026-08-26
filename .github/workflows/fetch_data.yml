@@ -19,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python.python-version: '3.10'
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
@@ -29,8 +29,6 @@ jobs:
       - name: Fetch Market Data
         env:
           DISCORD_SYSTEM_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_LOG_WEBHOOK_URL }}
-          # OANDA等のAPIキーが必要な場合はここに追加
-          # OANDA_API_KEY: ${{ secrets.OANDA_API_KEY }}
         run: |
           python fetch_data_main.py
 
