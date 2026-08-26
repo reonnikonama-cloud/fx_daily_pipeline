@@ -1,4 +1,5 @@
 import os
+import time
 import pandas as pd
 from datetime import date
 import google.generativeai as genai
@@ -21,7 +22,7 @@ class GeminiAIReporter:
             return
         try:
             genai.configure(api_key=self.api_key)
-            # 404エラー回避のため推奨モデル名（gemini-2.5-flash）に変更
+            # 無料枠で安定して動作する推奨モデル
             self.model = genai.GenerativeModel("gemini-2.5-flash")
         except Exception as e:
             self.logger.error("AI認証失敗", f"Gemini API の初期化に失敗しました:\n{e}")
@@ -37,14 +38,13 @@ class GeminiAIReporter:
             df = df_day.copy()
             df.columns = df.columns.astype(str).str.lower()
 
-            # ローソク足データ(open/high/low/close) または Tickerデータ(ask/bid等) の両方に対応できるロジック
+            # ローソク足データ(open/high/low/close) または Tickerデータ(ask/bid等) の両方に対応
             if "open" in df.columns and "close" in df.columns:
                 open_price = float(df["open"].iloc[0])
-                high_price = float(df["high"].max()) if "high" in df.columns else None
-                low_price = float(df["low"].min()) if "low" in df.columns else None
+                high_price = float(df["high"].astype(float).max()) if "high" in df.columns else None
+                low_price = float(df["low"].astype(float).min()) if "low" in df.columns else None
                 close_price = float(df["close"].iloc[-1])
             elif "bid" in df.columns:
-                # Ticker データが蓄積されている場合（bid/ask から概算）
                 open_price = float(df["bid"].iloc[0])
                 high_price = float(df["bid"].astype(float).max())
                 low_price = float(df["bid"].astype(float).min())
@@ -69,7 +69,17 @@ class GeminiAIReporter:
                 f"・終値: {close_price}\n"
             )
 
-            response = self.model.generate_content(prompt)
+            # 無料枠のレートリミット対策（429エラー発生時に最大3回リトライ）
+            response = None
+            for attempt in range(1, 4):
+                try:
+                    response = self.model.generate_content(prompt)
+                    break
+                except Exception as req_err:
+                    if attempt == 3:
+                        raise req_err
+                    time.sleep(attempt * 2)
+
             if response and response.text:
                 return f"🤖 **【AI相場分析】**\n{response.text.strip()}"
             return ""
