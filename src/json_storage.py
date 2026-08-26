@@ -11,6 +11,23 @@ class JSONStorage:
     def __init__(self, base_dir: str = "data"):
         self.base_dir = base_dir
 
+    def save_pair_data(self, symbol: str, data: list) -> bool:
+        """fetch_data_main.py との互換用メソッド（リスト形式のデータを受け取って追記）"""
+        if not data:
+            return False
+
+        success = True
+        # リスト型で渡された場合、各レコードを append_raw_ticker へ渡す
+        if isinstance(data, list):
+            for item in data:
+                res = self.append_raw_ticker(symbol, item)
+                if not res:
+                    success = False
+        elif isinstance(data, dict):
+            success = self.append_raw_ticker(symbol, data)
+
+        return success
+
     def append_raw_ticker(self, symbol: str, ticker_data: dict) -> bool:
         """APIから取得した Ticker 生データ（dict）に JST 変換を施し data.json へ追記"""
         if not ticker_data:
