@@ -1,42 +1,38 @@
-name: FXデイリーレポート送信
+# fetch_data_main.py
 
-on:
-  schedule:
-    # JST 23:58 (UTC 14:58) に定時実行
-    - cron: '58 14 * * *'
-  workflow_dispatch: # 手動実行用
+import os
+from src.system_logger import SystemLogger
+from src.json_storage import JSONStorage
+# ※既存のAPI取得モジュール（例: OANDA fetcher等）をインポート
+# from src.data_fetcher import OandaDataFetcher
 
-jobs:
-  run-daily-report:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python.python-version: '3.10'
+def main():
+    log_webhook = os.getenv("DISCORD_SYSTEM_LOG_WEBHOOK_URL", "")
+    logger = SystemLogger(webhook_url=log_webhook)
+    storage = JSONStorage(base_dir="data")
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    pairs = {
+        "米ドル/円": "USD_JPY",
+        "ユーロ/円": "EUR_JPY",
+        "英ポンド/円": "GBP_JPY",
+        "豪ドル/円": "AUD_JPY",
+        "NZドル/円": "NZD_JPY",
+        "カナダドル/円": "CAD_JPY",
+        "ユーロ/ドル": "EUR_USD",
+    }
 
-      - name: Run Daily Report Script
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          DISCORD_REPORT_WEBHOOK_URL: ${{ secrets.DISCORD_REPORT_WEBHOOK_URL }}
-          DISCORD_SYSTEM_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_LOG_WEBHOOK_URL }}
-          GOOGLE_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-        run: |
-          python run_daily_report.py
+    logger.info("データ収集開始", "最新レートの取得・蓄積を開始します。")
 
-      - name: Commit and push updated storage / logs
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add -A
-          git diff-index --quiet HEAD || git commit -m "Auto-update daily report record"
-          git push
+    # TODO: 各通貨ペアのデータ取得＆JSONStorageへの追加保存処理
+    # 例:
+    # fetcher = OandaDataFetcher(...)
+    # for pair_name, symbol in pairs.items():
+    #     df_new = fetcher.get_latest_candles(symbol)
+    #     storage.save_pair_data(symbol, df_new)
+
+    logger.info("データ収集完了", "蓄積データの更新が完了しました。")
+
+
+if __name__ == "__main__":
+    main()
