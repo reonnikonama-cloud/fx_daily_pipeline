@@ -20,7 +20,7 @@ def get_target_total_count() -> int:
 
 
 def main():
-    log_webhook = os.getenv("DISCORD_SYSTEM_LOG_WEBHOOK_URL", "").strip()
+    log_webhook = os.getenv("DISCORD_LOG_WEBHOOK_URL", "").strip()
     
     # 【デバッグ用】Webhook URL の読み込み確認（問題解決後に削除可）
     if not log_webhook:
