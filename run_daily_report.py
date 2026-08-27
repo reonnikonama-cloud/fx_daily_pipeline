@@ -17,7 +17,7 @@ def get_jst_now():
 def main():
     # 各種環境変数の取得
     report_webhook = os.getenv("DISCORD_REPORT_WEBHOOK_URL", "")
-    log_webhook = os.getenv("DISCORD_SYSTEM_LOG_WEBHOOK_URL", "")
+    log_webhook = os.getenv("DISCORD_LOG_WEBHOOK_URL", "")
     gemini_api_key = os.getenv("GEMINI_API_KEY", "")
     google_creds = os.getenv("GOOGLE_CREDENTIALS_BASE64", "")
     spreadsheet_id = os.getenv("SPREADSHEET_ID", "")
