@@ -29,7 +29,7 @@ def main():
     # GMOコイン Public API 用インスタンス生成（認証不要）
     fetcher = FXDataFetcher()
 
-    # 取得対象ペア定義（スイスフラン/円を含む全8ペア）
+    # 取得対象ペア定義（全8通貨ペア）
     pairs = {
         "米ドル/円": "USD_JPY",
         "ユーロ/円": "EUR_JPY",
@@ -41,7 +41,6 @@ def main():
         "ユーロ/ドル": "EUR_USD",
     }
 
-    # 曜日に応じた目標本数を自動設定
     total_target_count = get_target_total_count()
 
     logger.info("パイプライン起動", "GMOコイン APIよりレート一括取得を開始します。")
@@ -58,39 +57,46 @@ def main():
 
         # 2. 通貨ペアごとに抽出して JSONStorage へ保存し、進捗ログを出力
         for pair_name, symbol in pairs.items():
-            df_symbol = df_tickers[df_tickers["symbol"] == symbol]
+            try:
+                df_symbol = df_tickers[df_tickers["symbol"] == symbol]
 
-            if not df_symbol.empty:
-                data_to_save = df_symbol.to_dict(orient="records")
-                if storage.save_pair_data(symbol, data_to_save):
-                    success_count += 1
+                if not df_symbol.empty:
+                    data_to_save = df_symbol.to_dict(orient="records")
+                    if storage.save_pair_data(symbol, data_to_save):
+                        success_count += 1
 
-                    # 保存後の最新蓄積データを取得して progress ログを出力
-                    df_current = storage.load_pair_data(symbol)
-                    current_count = len(df_current)
+                        # 保存後の最新蓄積データを取得
+                        df_current = storage.load_pair_data(symbol)
+                        current_count = len(df_current)
 
-                    # Ticker データの末尾から最新価格と時刻を取得
-                    latest_record = df_symbol.iloc[-1]
-                    latest_price = float(latest_record.get("bid", 0.0))
+                        # Ticker データから安全に最新価格と時刻を取り出し
+                        latest_record = df_symbol.iloc[-1]
+                        
+                        try:
+                            latest_price = float(latest_record.get("bid", 0.0))
+                        except (ValueError, TypeError):
+                            latest_price = 0.0
 
-                    # 表示用タイムスタンプ（timestamp_jst優先、無ければ timestamp）
-                    timestamp_str = str(
-                        latest_record.get("timestamp_jst")
-                        or latest_record.get("timestamp", "")
-                    )
+                        timestamp_str = str(
+                            latest_record.get("timestamp_jst")
+                            or latest_record.get("timestamp", "")
+                        )
 
-                    # 進捗ログ（🟦 DATA_CHECK）を Discord へ送信
-                    logger.progress(
-                        current_count=current_count,
-                        total_count=total_target_count,
-                        timestamp_str=timestamp_str,
-                        price=latest_price,
-                        pair_label=pair_name,
-                    )
+                        # ログ通知 (DiscordClient 経由)
+                        logger.progress(
+                            current_count=current_count,
+                            total_count=total_target_count,
+                            timestamp_str=timestamp_str,
+                            price=latest_price,
+                            pair_label=pair_name,
+                        )
+                    else:
+                        logger.error("保存失敗", f"[{pair_name} ({symbol})] のデータ保存に失敗しました。")
                 else:
-                    logger.error("保存失敗", f"[{pair_name} ({symbol})] のデータ保存に失敗しました。")
-            else:
-                logger.error("データ抽出スキップ", f"[{pair_name} ({symbol})] のデータが見つかりませんでした。")
+                    logger.error("データ抽出スキップ", f"[{pair_name} ({symbol})] のデータが見つかりませんでした。")
+            
+            except Exception as pair_err:
+                logger.error("ペア処理エラー", f"[{pair_name} ({symbol})] の処理中に例外が発生: {str(pair_err)}")
 
         logger.info("全処理完了", f"蓄積データの更新が完了しました。（成功: {success_count}/{len(pairs)}）")
 
