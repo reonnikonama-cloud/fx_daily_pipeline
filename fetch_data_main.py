@@ -14,22 +14,25 @@ JST = pytz.timezone("Asia/Tokyo")
 def get_target_total_count() -> int:
     """現在の曜日（JST）に応じて、目標データ本数を返す（月曜: 200本 / 火〜金: 288本）"""
     weekday = datetime.now(JST).weekday()
-    # 0: 月曜日 -> 200本（朝7時〜24時想定）
     if weekday == 0:
         return 200
-    # 1〜4: 火〜金曜日 -> 288本（24時間）
     return 288
 
 
 def main():
-    log_webhook = os.getenv("DISCORD_SYSTEM_LOG_WEBHOOK_URL", "")
+    log_webhook = os.getenv("DISCORD_SYSTEM_LOG_WEBHOOK_URL", "").strip()
+    
+    # 【デバッグ用】Webhook URL の読み込み確認（問題解決後に削除可）
+    if not log_webhook:
+        print("[WARNING] DISCORD_SYSTEM_LOG_WEBHOOK_URL が設定されていないため、Discord通知はスキップされます。")
+    elif not log_webhook.startswith("http"):
+        print(f"[ERROR] Webhook URL の形式が不正です (httpから始まっていません): {log_webhook[:10]}...")
+
     logger = SystemLogger(webhook_url=log_webhook)
     storage = JSONStorage(base_dir="data")
 
-    # GMOコイン Public API 用インスタンス生成（認証不要）
     fetcher = FXDataFetcher()
 
-    # 取得対象ペア定義（全8通貨ペア）
     pairs = {
         "米ドル/円": "USD_JPY",
         "ユーロ/円": "EUR_JPY",
@@ -46,7 +49,6 @@ def main():
     logger.info("パイプライン起動", "GMOコイン APIよりレート一括取得を開始します。")
 
     try:
-        # 1. 一括で全通貨ペアの Ticker データを取得
         df_tickers = fetcher.fetch_bulk_data_with_retry(max_retries=5)
 
         if df_tickers.empty:
@@ -55,7 +57,6 @@ def main():
 
         success_count = 0
 
-        # 2. 通貨ペアごとに抽出して JSONStorage へ保存し、進捗ログを出力
         for pair_name, symbol in pairs.items():
             try:
                 df_symbol = df_tickers[df_tickers["symbol"] == symbol]
@@ -65,24 +66,20 @@ def main():
                     if storage.save_pair_data(symbol, data_to_save):
                         success_count += 1
 
-                        # 保存後の最新蓄積データを取得
+                        # 保存・整形済みの DataFrame (df_current) から安全に最新値・タイムスタンプを取得
                         df_current = storage.load_pair_data(symbol)
                         current_count = len(df_current)
 
-                        # Ticker データから安全に最新価格と時刻を取り出し
-                        latest_record = df_symbol.iloc[-1]
-                        
-                        try:
-                            latest_price = float(latest_record.get("bid", 0.0))
-                        except (ValueError, TypeError):
+                        if not df_current.empty:
+                            latest_row = df_current.iloc[-1]
+                            # index (Datetime) から文字列を取得
+                            timestamp_str = str(latest_row.name)
+                            latest_price = float(latest_row.get("bid", 0.0))
+                        else:
+                            timestamp_str = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
                             latest_price = 0.0
 
-                        timestamp_str = str(
-                            latest_record.get("timestamp_jst")
-                            or latest_record.get("timestamp", "")
-                        )
-
-                        # ログ通知 (DiscordClient 経由)
+                        # ログ通知
                         logger.progress(
                             current_count=current_count,
                             total_count=total_target_count,
@@ -94,7 +91,7 @@ def main():
                         logger.error("保存失敗", f"[{pair_name} ({symbol})] のデータ保存に失敗しました。")
                 else:
                     logger.error("データ抽出スキップ", f"[{pair_name} ({symbol})] のデータが見つかりませんでした。")
-            
+
             except Exception as pair_err:
                 logger.error("ペア処理エラー", f"[{pair_name} ({symbol})] の処理中に例外が発生: {str(pair_err)}")
 
