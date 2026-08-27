@@ -24,7 +24,7 @@ def main():
     
     # 【デバッグ用】Webhook URL の読み込み確認（問題解決後に削除可）
     if not log_webhook:
-        print("[WARNING] DISCORD_SYSTEM_LOG_WEBHOOK_URL が設定されていないため、Discord通知はスキップされます。")
+        print("[WARNING] DISCORD_LOG_WEBHOOK_URL が設定されていないため、Discord通知はスキップされます。")
     elif not log_webhook.startswith("http"):
         print(f"[ERROR] Webhook URL の形式が不正です (httpから始まっていません): {log_webhook[:10]}...")
 
