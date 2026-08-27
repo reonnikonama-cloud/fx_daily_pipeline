@@ -2,6 +2,7 @@
 
 import json
 import urllib.request
+import urllib.error
 
 
 class DiscordClient:
@@ -26,8 +27,12 @@ class DiscordClient:
                 headers=headers,
                 method="POST",
             )
-            with urllib.request.urlopen(req) as resp:
+            # タイムアウト 10 秒を設定してハングアップを防止
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 return resp.status in (200, 204)
+        except urllib.error.HTTPError as e:
+            print(f" [DiscordClient] HTTP Error: {e.code} - {e.reason}")
+            return False
         except Exception as e:
             print(f" [DiscordClient] テキスト送信失敗: {e}")
             return False
@@ -55,7 +60,7 @@ class DiscordClient:
 
                 body.append(f"--{boundary}".encode())
                 body.append(
-                    f'Content-Disposition: form-data; name="file"; filename="{image_path}"'.encode()
+                    f'Content-Disposition: form-data; name="{image_path}"; filename="{image_path}"'.encode()
                 )
                 body.append(b"Content-Type: image/png")
                 body.append(b"")
@@ -76,8 +81,11 @@ class DiscordClient:
             req = urllib.request.Request(
                 webhook_url, data=payload, headers=headers, method="POST"
             )
-            with urllib.request.urlopen(req) as resp:
+            with urllib.request.urlopen(req, timeout=15) as resp:
                 return resp.status in (200, 204)
+        except urllib.error.HTTPError as e:
+            print(f" [DiscordClient] Multipart HTTP Error: {e.code} - {e.reason}")
+            return False
         except Exception as e:
             print(f" [DiscordClient] Multipart送信失敗: {e}")
             return False
