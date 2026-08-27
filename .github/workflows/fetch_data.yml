@@ -31,7 +31,7 @@ jobs:
 
       - name: Fetch Market Data
         env:
-          DISCORD_SYSTEM_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_SYSTEM_LOG_WEBHOOK_URL }}
+          DISCORD_LOG_WEBHOOK_URL: ${{ secrets.DISCORD_LOG_WEBHOOK_URL }}
         run: |
           python fetch_data_main.py
 
