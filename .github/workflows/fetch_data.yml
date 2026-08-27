@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # リモートとの差分・競合を防ぐため全履歴を取得
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,4 +40,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          git diff-index --quiet HEAD || (git commit -m "Auto-update market data" && git pull --rebase origin main && git push)
+          # 変更差分が存在する場合のみコミット＆リモート同期の上プッシュ
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Auto-update market data"
+            git pull --rebase origin main
+            git push origin main
+          fi
