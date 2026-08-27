@@ -24,15 +24,29 @@ class SystemLogger:
         print(f"[{level}] {title} ({timestamp}): {message}")
 
         if self.webhook_url:
-            DiscordClient.send_message(self.webhook_url, content)
+            try:
+                DiscordClient.send_message(self.webhook_url, content)
+            except Exception as e:
+                print(f"[ERROR] Discord通知送信失敗: {e}")
 
     def info(self, title: str, message: str):
         self._log("INFO", title, message, "🟢")
 
     def progress(self, current_count: int, total_count: int, timestamp_str: str, price: float, pair_label: str = ""):
-        percentage = (current_count / total_count) * 100
+        """データ取得進捗ログを出力 (🟦 DATA_CHECK)"""
+        # ゼロ除算防止
+        total = total_count if total_count > 0 else 1
+        percentage = (current_count / total) * 100
+
+        # ISO形式などの文字列を見やすい形式 (YYYY-MM-DD HH:MM:SS) に簡易整形
+        clean_ts = timestamp_str.replace("T", " ")
+        if "+" in clean_ts:
+            clean_ts = clean_ts.split("+")[0]
+        if "." in clean_ts:
+            clean_ts = clean_ts.split(".")[0]
+
         prefix = f"[{pair_label}] " if pair_label else ""
-        message = f"{prefix}[{current_count:03d}/{total_count}] 時刻: {timestamp_str} | Close: {price:.3f} ({percentage:.1f}%)"
+        message = f"{prefix}[{current_count:03d}/{total_count}] 時刻: {clean_ts} | Close: {price:.3f} ({percentage:.1f}%)"
         self._log("DATA_CHECK", "データ取得進捗", message, "🟦")
 
     def warning(self, title: str, message: str):
