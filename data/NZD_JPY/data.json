@@ -1070,5 +1070,13 @@
     "timestamp": "2026-08-28T00:01:23.384883Z",
     "status": "OPEN",
     "timestamp_jst": "2026-08-28T09:01:23"
+  },
+  {
+    "symbol": "NZD_JPY",
+    "ask": "94.89",
+    "bid": "94.881",
+    "timestamp": "2026-08-28T00:05:53.773564Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-08-28T09:05:53"
   }
 ]
