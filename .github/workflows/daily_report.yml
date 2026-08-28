@@ -1,9 +1,9 @@
 name: FXデイリーレポート作成・送信
 
 on:
-  schedule:
-    # JST 23:58 (UTC 14:58) に定時実行
-    - cron: '58 14 * * *'
+  # cron-job.org 等の外部トリガーと重複起爆するのを防ぐため、内蔵 schedule はオフに設定
+  # schedule:
+  #   - cron: '58 14 * * *'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +16,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # 最新履歴を取得してプル時の競合を防止
           fetch-depth: 0
 
       - name: Set up Python
@@ -44,9 +43,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -A
-          # 差分がある場合のみコミットしてリモートの最新を取得後に push
+          # [skip ci] を付与して Push 後の別ワークフロー連鎖起動（再起動ループ）を完全防止
           if ! git diff-index --quiet HEAD; then
-            git commit -m "Chore: Auto-update daily report record and clear data.json"
+            git commit -m "Chore: Auto-update daily report record and clear data.json [skip ci]"
             git pull --rebase origin main
             git push origin main
           fi
