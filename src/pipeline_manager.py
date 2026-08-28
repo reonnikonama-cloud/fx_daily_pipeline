@@ -18,11 +18,26 @@ from src.discord_client import DiscordClient
 class PipelineManager:
     """日次データ処理・レポート生成・外部連携を一括管理するマネージャー"""
 
-    def __init__(self, base_dir: str, report_webhook_url: str, logger: SystemLogger):
+    def __init__(
+        self,
+        base_dir: str,
+        report_webhook_url: str,
+        logger: SystemLogger,
+        gemini_api_key: str = "",
+        google_credentials_base64: str = "",
+        spreadsheet_id: str = "",
+    ):
         self.storage = JSONStorage(base_dir=base_dir)
-        self.sheets_storage = GoogleSheetsStorage(logger=logger)
+        
+        # 受け取った引数を各連携ストレージ・コンポーネントへ引き継ぐ
+        self.sheets_storage = GoogleSheetsStorage(
+            logger=logger,
+            credentials_base64=google_credentials_base64,
+            spreadsheet_id=spreadsheet_id,
+        )
         self.reporter = FXDailyReporter(logger=logger)
-        self.ai_reporter = GeminiAIReporter(logger=logger)
+        self.ai_reporter = GeminiAIReporter(logger=logger, api_key=gemini_api_key)
+        
         self.report_webhook_url = report_webhook_url
         self.logger = logger
         self.sent_log_file = os.path.join(base_dir, "sent_reports.json")
