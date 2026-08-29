@@ -502,5 +502,13 @@
     "timestamp": "2026-08-29T07:11:01.146237Z",
     "status": "CLOSE",
     "timestamp_jst": "2026-08-29T16:11:01"
+  },
+  {
+    "symbol": "EUR_JPY",
+    "ask": "185.494",
+    "bid": "185.366",
+    "timestamp": "2026-08-29T07:16:21.101659Z",
+    "status": "CLOSE",
+    "timestamp_jst": "2026-08-29T16:16:21"
   }
 ]
