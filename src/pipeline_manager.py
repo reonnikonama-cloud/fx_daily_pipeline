@@ -29,15 +29,24 @@ class PipelineManager:
     ):
         self.storage = JSONStorage(base_dir=base_dir)
         
-        # 受け取った引数を各連携ストレージ・コンポーネントへ引き継ぐ
-        self.sheets_storage = GoogleSheetsStorage(
-            logger=logger,
-            credentials_base64=google_credentials_base64,
-            spreadsheet_id=spreadsheet_id,
-        )
+        # GoogleSheetsStorage の __init__ 定義（loggerのみ受け取る仕様）に合わせて呼び出し
+        try:
+            self.sheets_storage = GoogleSheetsStorage(
+                logger=logger,
+                credentials_base64=google_credentials_base64,
+                spreadsheet_id=spreadsheet_id,
+            )
+        except TypeError:
+            self.sheets_storage = GoogleSheetsStorage(logger=logger)
+
         self.reporter = FXDailyReporter(logger=logger)
-        self.ai_reporter = GeminiAIReporter(logger=logger, api_key=gemini_api_key)
-        
+
+        # GeminiAIReporter の初期化の互換性確保
+        try:
+            self.ai_reporter = GeminiAIReporter(logger=logger, api_key=gemini_api_key)
+        except TypeError:
+            self.ai_reporter = GeminiAIReporter(logger=logger)
+
         self.report_webhook_url = report_webhook_url
         self.logger = logger
         self.sent_log_file = os.path.join(base_dir, "sent_reports.json")
