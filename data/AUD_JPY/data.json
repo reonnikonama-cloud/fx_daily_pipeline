@@ -1398,5 +1398,13 @@
     "timestamp": "2026-08-30T05:11:00.904567Z",
     "status": "CLOSE",
     "timestamp_jst": "2026-08-30T14:11:00"
+  },
+  {
+    "symbol": "AUD_JPY",
+    "ask": "114.707",
+    "bid": "114.624",
+    "timestamp": "2026-08-30T05:16:02.51655Z",
+    "status": "CLOSE",
+    "timestamp_jst": "2026-08-30T14:16:02"
   }
 ]
