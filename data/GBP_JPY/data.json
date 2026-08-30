@@ -910,5 +910,13 @@
     "timestamp": "2026-08-30T00:11:02.939389Z",
     "status": "CLOSE",
     "timestamp_jst": "2026-08-30T09:11:02"
+  },
+  {
+    "symbol": "GBP_JPY",
+    "ask": "216.731",
+    "bid": "216.589",
+    "timestamp": "2026-08-30T00:16:06.507693Z",
+    "status": "CLOSE",
+    "timestamp_jst": "2026-08-30T09:16:06"
   }
 ]
