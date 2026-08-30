@@ -22,7 +22,6 @@ def get_target_total_count() -> int:
 def main():
     log_webhook = os.getenv("DISCORD_LOG_WEBHOOK_URL", "").strip()
     
-    # 【デバッグ用】Webhook URL の読み込み確認（問題解決後に削除可）
     if not log_webhook:
         print("[WARNING] DISCORD_LOG_WEBHOOK_URL が設定されていないため、Discord通知はスキップされます。")
     elif not log_webhook.startswith("http"):
@@ -56,12 +55,19 @@ def main():
             sys.exit(1)
 
         success_count = 0
+        close_skipped = False
 
         for pair_name, symbol in pairs.items():
             try:
                 df_symbol = df_tickers[df_tickers["symbol"] == symbol]
 
                 if not df_symbol.empty:
+                    # status のチェック (CLOSE の場合は保存せずに正常スキップ)
+                    status_val = df_symbol.iloc[0].get("status", "")
+                    if status_val == "CLOSE":
+                        close_skipped = True
+                        continue
+
                     data_to_save = df_symbol.to_dict(orient="records")
                     if storage.save_pair_data(symbol, data_to_save):
                         success_count += 1
@@ -72,7 +78,6 @@ def main():
 
                         if not df_current.empty:
                             latest_row = df_current.iloc[-1]
-                            # index (Datetime) から文字列を取得
                             timestamp_str = str(latest_row.name)
                             latest_price = float(latest_row.get("bid", 0.0))
                         else:
@@ -95,7 +100,11 @@ def main():
             except Exception as pair_err:
                 logger.error("ペア処理エラー", f"[{pair_name} ({symbol})] の処理中に例外が発生: {str(pair_err)}")
 
-        logger.info("全処理完了", f"蓄積データの更新が完了しました。（成功: {success_count}/{len(pairs)}）")
+        # 閉場状態（CLOSE）でスキップされた場合の正常終了通知
+        if close_skipped and success_count == 0:
+            logger.info("市場閉場", "市場閉場（status: CLOSE）のためデータ保存・蓄積をスキップしました。")
+        else:
+            logger.info("全処理完了", f"蓄積データの更新が完了しました。（成功: {success_count}/{len(pairs)}）")
 
     except Exception as e:
         logger.error("システムエラー", f"データ収集処理中に例外が発生しました: {str(e)}")
