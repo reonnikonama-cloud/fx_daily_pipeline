@@ -990,5 +990,13 @@
     "timestamp": "2026-10-13T01:06:06.430292Z",
     "status": "OPEN",
     "timestamp_jst": "2026-10-13T10:06:06"
+  },
+  {
+    "symbol": "AUD_JPY",
+    "ask": "110.186",
+    "bid": "110.179",
+    "timestamp": "2026-10-13T01:10:56.317815Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-10-13T10:10:56"
   }
 ]
