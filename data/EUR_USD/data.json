@@ -1526,5 +1526,13 @@
     "timestamp": "2026-10-16T06:46:03.356905Z",
     "status": "OPEN",
     "timestamp_jst": "2026-10-16T15:46:03"
+  },
+  {
+    "symbol": "EUR_USD",
+    "ask": "1.12374",
+    "bid": "1.12369",
+    "timestamp": "2026-10-16T06:51:04.589982Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-10-16T15:51:04"
   }
 ]
