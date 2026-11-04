@@ -1710,5 +1710,13 @@
     "timestamp": "2026-11-04T09:06:01.541953Z",
     "status": "OPEN",
     "timestamp_jst": "2026-11-04T18:06:01"
+  },
+  {
+    "symbol": "GBP_JPY",
+    "ask": "213.487",
+    "bid": "213.478",
+    "timestamp": "2026-11-04T09:11:15.182756Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-11-04T18:11:15"
   }
 ]
