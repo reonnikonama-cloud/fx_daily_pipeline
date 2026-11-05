@@ -526,5 +526,13 @@
     "timestamp": "2026-11-05T20:36:10.226854Z",
     "status": "OPEN",
     "timestamp_jst": "2026-11-06T05:36:10"
+  },
+  {
+    "symbol": "EUR_JPY",
+    "ask": "177.13",
+    "bid": "177.125",
+    "timestamp": "2026-11-05T20:41:10.546426Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-11-06T05:41:10"
   }
 ]
