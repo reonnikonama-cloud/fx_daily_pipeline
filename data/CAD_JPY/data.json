@@ -1030,5 +1030,13 @@
     "timestamp": "2026-11-06T02:01:38.827555Z",
     "status": "OPEN",
     "timestamp_jst": "2026-11-06T11:01:38"
+  },
+  {
+    "symbol": "CAD_JPY",
+    "ask": "112.671",
+    "bid": "112.663",
+    "timestamp": "2026-11-06T02:06:09.500244Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-11-06T11:06:09"
   }
 ]
