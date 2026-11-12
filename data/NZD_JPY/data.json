@@ -1022,5 +1022,13 @@
     "timestamp": "2026-11-12T02:01:37.888439Z",
     "status": "OPEN",
     "timestamp_jst": "2026-11-12T11:01:37"
+  },
+  {
+    "symbol": "NZD_JPY",
+    "ask": "88.92",
+    "bid": "88.911",
+    "timestamp": "2026-11-12T02:05:56.448595Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-11-12T11:05:56"
   }
 ]
