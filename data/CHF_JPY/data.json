@@ -798,5 +798,13 @@
     "timestamp": "2026-11-16T06:06:03.12147Z",
     "status": "OPEN",
     "timestamp_jst": "2026-11-16T15:06:03"
+  },
+  {
+    "symbol": "CHF_JPY",
+    "ask": "190.096",
+    "bid": "190.085",
+    "timestamp": "2026-11-16T06:11:07.233468Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-11-16T15:11:07"
   }
 ]
