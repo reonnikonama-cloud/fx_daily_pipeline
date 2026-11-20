@@ -1470,5 +1470,13 @@
     "timestamp": "2026-11-20T06:21:14.145633Z",
     "status": "OPEN",
     "timestamp_jst": "2026-11-20T15:21:14"
+  },
+  {
+    "symbol": "EUR_JPY",
+    "ask": "174.874",
+    "bid": "174.869",
+    "timestamp": "2026-11-20T06:25:59.849672Z",
+    "status": "OPEN",
+    "timestamp_jst": "2026-11-20T15:25:59"
   }
 ]
